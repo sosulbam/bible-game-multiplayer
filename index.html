@@ -436,7 +436,9 @@
 
             onSnapshot(doc(db, "games", gameId), (docSnap) => {
                 if (docSnap.exists() && docSnap.data().teams) {
-                    teams = docSnap.data().teams;
+                    const gameData = docSnap.data();
+                    teams = gameData.teams;
+                    gameMode = gameData.mode; // Sync local gameMode with DB
                      if (gameMode === 'team') {
                         teamANameEl.textContent = teams.teamA.name;
                         teamBNameEl.textContent = teams.teamB.name;
@@ -499,7 +501,7 @@
         
         function listenForActions() {
             const actionsRef = collection(db, "games", gameId, "actions");
-            actionsUnsubscribe = onSnapshot(actionsRef, (snapshot) => {
+            actionsUnsubscribe = onSnapshot(query(actionsRef, where("timestamp", ">", new Date())), (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === "added") {
                         const action = change.doc.data();
@@ -531,7 +533,6 @@
                             throw "Document does not exist!";
                         }
                         
-                        // Prevent multiple hits in the same round
                         if (!roundActive) return;
 
                         const currentScore = playerDoc.data().score || 0;
@@ -551,12 +552,10 @@
                             for(let i = 0; i < 30; i++) {
                                 particles.push(new Particle(targetEnemy.x + targetEnemy.width/2, targetEnemy.y + targetEnemy.height/2, '255, 215, 0'));
                             }
-                            enemies = []; // Clear enemies immediately
+                            enemies = [];
                             setTimeout(() => { nextRound(); }, 2000);
                         } else {
                             playIncorrectSound();
-                            // Incorrect answers might not affect score, or you can add a penalty
-                            // transaction.update(playerDocRef, { score: currentScore + difficultySettings.penalty });
                             if (gameMode === 'team' && currentTeam) {
                                 const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.penalty;
                                 transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
@@ -704,12 +703,13 @@
                 roundActive = false;
                 setTimeout(() => nextRound(), 1500);
             }
+            
+            beams.forEach(b => b.draw());
             beams.forEach((b, i) => {
                 b.update();
                 if (b.life <= 0) beams.splice(i, 1);
             });
-            beams.forEach(b => b.draw());
-
+            
             particles.forEach((p, i) => {
                 p.update();
                 if (p.life <= 0) particles.splice(i, 1);
@@ -718,6 +718,7 @@
 
         async function endGame() {
             if (gameScreen.classList.contains('hidden')) return;
+            roundActive = false;
             clearInterval(gameTimerId);
             playFinishSound();
             if (actionsUnsubscribe) actionsUnsubscribe();
@@ -726,7 +727,7 @@
             await updateDoc(doc(db, "games", gameId), { state: "finished" });
 
             if (gameMode === 'team') {
-                const winnerTeamId = teams.teamA.score > teams.teamB.score ? 'teamA' : (teams.teamB.score > teams.teamA.score ? 'teamB' : null);
+                 const winnerTeamId = teams.teamA.score > teams.teamB.score ? 'teamA' : (teams.teamB.score > teams.teamA.score ? 'teamB' : null);
                 
                 if (winnerTeamId) {
                     const winnerTeam = teams[winnerTeamId];
@@ -750,13 +751,15 @@
                 } else {
                      resultTitle.textContent = `무승부!`;
                      finalRanking.innerHTML = `
-                        <div class="p-6 bg-blue-100 border-2 border-blue-500 rounded-lg shadow-lg">
-                            <h3 class="text-3xl font-bold text-blue-700">${teams.teamA.name}</h3>
-                            <p class="text-4xl">${teams.teamA.score}점</p>
-                        </div>
-                        <div class="p-6 bg-red-100 border-2 border-red-500 rounded-lg shadow-lg">
-                            <h3 class="text-3xl font-bold text-red-700">${teams.teamB.name}</h3>
-                            <p class="text-4xl">${teams.teamB.score}점</p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-6 bg-blue-100 border-2 border-blue-500 rounded-lg shadow-lg">
+                                <h3 class="text-3xl font-bold text-blue-700">${teams.teamA.name}</h3>
+                                <p class="text-4xl">${teams.teamA.score}점</p>
+                            </div>
+                            <div class="p-6 bg-red-100 border-2 border-red-500 rounded-lg shadow-lg">
+                                <h3 class="text-3xl font-bold text-red-700">${teams.teamB.name}</h3>
+                                <p class="text-4xl">${teams.teamB.score}점</p>
+                            </div>
                         </div>
                      `;
                 }
@@ -776,22 +779,41 @@
 
         function isValidBlankWord(word) {
             const particlesAndEndings = ['은', '는', '이', '가', '을', '를', '의', '에', '에게', '께', '에서', '으로', '로', '와', '과', '도', '만', '뿐', '까지', '마저', '조차', '부터', '하고', '이며', '이라', '다', '요', '죠', '고', '며', '니', '네', '라', '나', '까', '습니다', 'ㅂ니다', '어요', '아요'];
-            if (word.length <= 1) return false;
+            const cleanWord = word.replace(/[.,!?]/g, '');
+            if (cleanWord.length <= 1) return false;
             for (const p of particlesAndEndings) {
-                if (word.endsWith(p)) return false;
+                if (cleanWord.endsWith(p)) return false;
             }
-            return !/\W/.test(word);
+            return true;
         }
 
         function generateDistractors(correctWord, allVerses) {
-            const candidatePool = allVerses.flatMap(v => v.본문.split(' '))
-                                         .filter(w => isValidBlankWord(w) && w.length > 1 && w !== correctWord);
-            
-            const distractors = new Set();
-            while (distractors.size < 2 && candidatePool.length > 0) {
-                const randomIndex = Math.floor(Math.random() * candidatePool.length);
-                distractors.add(candidatePool.splice(randomIndex, 1)[0]);
+            // 1. 모든 단어로 후보군 생성 (약간 완화된 필터)
+            const candidatePool = Array.from(new Set(
+                allVerses
+                    .flatMap(v => v.본문.split(' '))
+                    .map(w => w.replace(/[.,!?]/g, '')) // 구두점 제거
+                    .filter(w => w.length > 1 && w !== correctWord)
+            ));
+
+            // 2. 후보군 무작위로 섞기 (Fisher-Yates shuffle)
+            for (let i = candidatePool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [candidatePool[i], candidatePool[j]] = [candidatePool[j], candidatePool[i]];
             }
+            
+            // 3. 2개의 오답 보기 선택
+            const distractors = new Set(candidatePool.slice(0, 2));
+
+            // 4. 안전장치: 만약 오답 보기가 2개 미만일 경우, 일반 단어로 채우기
+            const genericDistractors = ["사랑", "믿음", "소망", "예수", "하나님", "천국", "기도", "말씀"];
+            while (distractors.size < 2) {
+                const genericWord = genericDistractors[Math.floor(Math.random() * genericDistractors.length)];
+                if (genericWord !== correctWord && !distractors.has(genericWord)) {
+                    distractors.add(genericWord);
+                }
+            }
+            
             return Array.from(distractors);
         }
 
@@ -808,7 +830,7 @@
 
             if (gameMode === 'team') {
                 playerListContainer.classList.add('hidden');
-                teamDisplay.style.display = 'grid'; // Use style for grid display
+                teamDisplay.style.display = 'grid';
                 teamDisplay.classList.remove('hidden');
                 teamSettingsContainer.classList.remove('hidden');
                 teamANameEl.textContent = teams.teamA?.name || '팀 A';
@@ -870,8 +892,8 @@
         pauseGameBtn.addEventListener('click', () => {
             isGamePaused = !isGamePaused;
             pauseGameBtn.textContent = isGamePaused ? '계속' : '일시정지';
-            pauseGameBtn.classList.toggle('bg-yellow-500');
-            pauseGameBtn.classList.toggle('bg-green-500');
+            pauseGameBtn.classList.toggle('bg-yellow-500', !isGamePaused);
+            pauseGameBtn.classList.toggle('bg-green-500', isGamePaused);
             if(gameId) updateDoc(doc(db,"games", gameId), { paused: isGamePaused });
         });
         forceEndGameBtn.addEventListener('click', endGame);
@@ -900,12 +922,13 @@
                     if (cat === '전체') btn.classList.add('selected');
                     btn.addEventListener('click', () => {
                         btn.classList.toggle('selected');
+                        const isAllSelected = categorySelector.querySelector('[data-category="전체"]').classList.contains('selected');
                         if (btn.dataset.category === '전체' && btn.classList.contains('selected')) {
                             categorySelector.querySelectorAll('.category-btn').forEach(b => {
                                 if (b !== btn) b.classList.remove('selected');
                             });
                         } else if (btn.dataset.category !== '전체' && btn.classList.contains('selected')) {
-                             categorySelector.querySelector('[data-category="전체"]').classList.remove('selected');
+                             if(isAllSelected) categorySelector.querySelector('[data-category="전체"]').classList.remove('selected');
                         }
                     });
                     categorySelector.appendChild(btn);
