@@ -14,6 +14,7 @@
     <style>
         body { font-family: 'Gowun Dodum', sans-serif; background-color: #f0f9ff; }
         canvas { background: linear-gradient(to bottom, #38bdf8, #e0f2fe); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .category-btn.selected { background-color: #0ea5e9; color: white; }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen">
@@ -23,6 +24,32 @@
         <div id="lobby-screen">
             <h1 class="text-4xl font-bold text-sky-700 mb-4">말씀의 빛: 그룹 대전</h1>
             <p class="text-xl text-gray-600 mb-6">스마트폰으로 QR 코드를 스캔하여 게임에 참여하세요!</p>
+            
+            <!-- 게임 설정 -->
+            <div class="max-w-3xl mx-auto bg-white/70 p-4 rounded-lg shadow-md mb-6">
+                <h3 class="text-xl font-bold text-gray-700 mb-3">게임 설정</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                    <!-- 카테고리 선택 -->
+                    <div>
+                        <label class="font-bold">카테고리 선택 (다중 선택 가능):</label>
+                        <div id="category-selector" class="mt-2 flex flex-wrap gap-2 p-2 bg-gray-100 rounded-md max-h-32 overflow-y-auto">
+                            <!-- 카테고리 버튼이 여기에 동적으로 추가됩니다 -->
+                        </div>
+                    </div>
+                    <!-- 문제 수 및 시간 제한 -->
+                    <div class="space-y-3">
+                        <div>
+                            <label for="rounds-input" class="font-bold">문제 수:</label>
+                            <input type="number" id="rounds-input" value="10" min="5" max="50" step="1" class="w-full p-2 border rounded-md">
+                        </div>
+                        <div>
+                            <label for="time-limit-input" class="font-bold">라운드 당 시간 (초):</label>
+                            <input type="number" id="time-limit-input" value="30" min="10" max="120" step="5" class="w-full p-2 border rounded-md">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="flex flex-col md:flex-row items-center justify-center gap-8">
                 <div id="qrcode" class="p-4 bg-white rounded-lg shadow-md"></div>
                 <div>
@@ -61,7 +88,7 @@
                     </div>
                     <div>
                         <span class="font-bold text-xl">시간:</span>
-                        <span id="timer" class="font-bold text-xl">60</span>
+                        <span id="timer" class="font-bold text-xl">30</span>
                     </div>
                 </div>
             </div>
@@ -73,7 +100,6 @@
         <div id="result-screen" class="hidden">
             <h1 class="text-5xl font-bold text-amber-500 mb-8">🎉 최종 결과 🎉</h1>
             <div id="final-ranking" class="space-y-4 max-w-md mx-auto">
-                <!-- 랭킹이 여기에 동적으로 추가됩니다. -->
             </div>
             <button id="restart-button" class="mt-12 bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-full text-2xl transition shadow-lg">새 게임 시작</button>
         </div>
@@ -82,7 +108,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, collection, onSnapshot, updateDoc, addDoc, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, collection, onSnapshot, updateDoc, addDoc, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // ===============================================================
         // 1단계에서 생성한 Firebase 설정 코드를 붙여넣으세요.
@@ -99,7 +125,6 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // --- DOM Elements ---
         const lobbyScreen = document.getElementById('lobby-screen');
         const gameScreen = document.getElementById('game-screen');
         const resultScreen = document.getElementById('result-screen');
@@ -120,8 +145,10 @@
         const timerEl = document.getElementById('timer');
         const finalRanking = document.getElementById('final-ranking');
         const restartButton = document.getElementById('restart-button');
+        const categorySelector = document.getElementById('category-selector');
+        const roundsInput = document.getElementById('rounds-input');
+        const timeLimitInput = document.getElementById('time-limit-input');
 
-        // --- Game State ---
         let gameId;
         let players = {};
         let playersUnsubscribe, actionsUnsubscribe;
@@ -129,18 +156,22 @@
         let currentBlankWord;
         let enemies = [];
         let particles = [];
+        let beams = [];
         let roundTimerId = null;
-        const totalRounds = 10;
-        let currentRound = 0;
         let roundActive = false;
         let synth;
 
+        // 게임 설정 변수
+        let selectedCategories = [];
+        let totalRounds = 10;
+        let roundTimeLimit = 30;
+
         const difficultySettings = {
             speed: 0.5, 
-            points: 10
+            points: 10,
+            penalty: -10
         };
 
-        // --- Game Classes ---
         class PlayerCharacter {
             constructor(id, name) {
                 this.id = id;
@@ -153,14 +184,36 @@
                 const g = Math.floor(Math.random() * 155) + 100;
                 const b = Math.floor(Math.random() * 155) + 100;
                 this.color = `rgb(${r},${g},${b})`;
+                this.flash = 0;
+                
+                const sheepSVG = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 45" width="${this.width}" height="${this.height}">
+                      <g fill="${this.color}" stroke="#555" stroke-width="1">
+                        <path d="M20,25 a10,10 0 1,1 20,0 a15,15 0 1,1 -20,0" transform="translate(0, 5)"/>
+                        <circle cx="15" cy="20" r="8"/><circle cx="45" cy="20" r="8"/><circle cx="30" cy="12" r="10"/>
+                        <g fill="#000"><circle cx="25" cy="30" r="1.5"/><circle cx="35" cy="30" r="1.5"/></g>
+                        <path d="M 28 35 q 2 -3 4 0" stroke="black" fill="none" stroke-width="1"/>
+                      </g>
+                      <rect x="20" y="38" width="5" height="7" rx="2" fill="${this.color}" stroke="#555" /><rect x="35" y="38" width="5" height="7" rx="2" fill="${this.color}" stroke="#555"/>
+                    </svg>`;
+                this.image = new Image();
+                this.image.src = `data:image/svg+xml;base64,${btoa(sheepSVG)}`;
             }
             draw() {
-                ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
+                if (this.flash > 0) {
+                    ctx.globalAlpha = 0.5 + (Math.sin(Date.now() / 50) * 0.5);
+                    this.flash--;
+                }
+                ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+                ctx.globalAlpha = 1.0;
                 ctx.fillStyle = 'black';
                 ctx.textAlign = 'center';
                 ctx.font = '14px Gowun Dodum';
                 ctx.fillText(this.name, this.x + this.width / 2, this.y - 5);
+            }
+            shoot() {
+                this.flash = 30;
+                beams.push(new Beam(this.x + this.width / 2, this.y, this.color));
             }
         }
         
@@ -211,8 +264,34 @@
                 this.draw();
             }
         }
+
+        class Beam {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.width = 10;
+                this.height = 30;
+                this.speed = 15;
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x - this.width/2, this.y - this.height);
+                ctx.lineTo(this.x + this.width/2, this.y - this.height);
+                ctx.closePath();
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 15;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+            update() {
+                this.y -= this.speed;
+                this.draw();
+            }
+        }
         
-        // --- Audio ---
         function setupAudio() {
             if (synth || (Tone.context && Tone.context.state === 'running')) return;
             Tone.start();
@@ -225,12 +304,9 @@
         const playFinishSound = () => playSound(() => synth.triggerAttackRelease(['C4', 'E4', 'G4', 'C5'], '4n'));
 
 
-        // --- Main Logic ---
         async function initializeHost() {
             const gameRef = await addDoc(collection(db, "games"), {
                 state: "lobby",
-                currentRound: 0,
-                question: { verse: "", text: "" },
                 createdAt: serverTimestamp()
             });
             gameId = gameRef.id;
@@ -238,7 +314,6 @@
 
             const joinUrl = `${window.location.origin}/join.html?gameId=${gameId}`;
             
-            // PC 참가자용 URL 표시
             pcJoinUrlInput.value = joinUrl;
             pcJoinUrlContainer.classList.remove('hidden');
 
@@ -283,7 +358,6 @@
                     players[id] = { ...players[id], ...playerData };
                 }
             });
-             // 나간 플레이어 제거
             Object.keys(players).forEach(id => {
                 if (!newPlayerData[id]) {
                     delete players[id];
@@ -322,19 +396,20 @@
             const targetEnemy = enemies.find(e => e.number === targetNumber);
 
             if (targetEnemy) {
+                const player = players[playerId];
+                if (player && player.character) {
+                    player.character.shoot();
+                }
+
                 if (targetEnemy.isCorrect) {
                     roundActive = false;
                     playCorrectSound();
                     
-                    const winner = players[playerId];
-                    const newScore = (winner.score || 0) + difficultySettings.points;
+                    const newScore = (player.score || 0) + difficultySettings.points;
                     await updateDoc(doc(db, "games", gameId, "players", playerId), { score: newScore });
 
-                    const winnerChar = winner.character;
-                    if (winnerChar) {
-                        for(let i = 0; i < 30; i++) {
-                            particles.push(new Particle(winnerChar.x + winnerChar.width/2, winnerChar.y + winnerChar.height/2, '255, 215, 0'));
-                        }
+                    for(let i = 0; i < 30; i++) {
+                        particles.push(new Particle(targetEnemy.x + targetEnemy.width/2, targetEnemy.y + targetEnemy.height/2, '255, 215, 0'));
                     }
                     
                     setTimeout(() => { nextRound(); }, 2000);
@@ -342,15 +417,25 @@
                 } else {
                     playIncorrectSound();
                     const playerDocRef = doc(db, "games", gameId, "players", playerId);
-                    const currentScore = players[playerId].score || 0;
-                    await updateDoc(playerDocRef, { score: Math.max(0, currentScore - 5) });
+                    const currentScore = player.score || 0;
+                    await updateDoc(playerDocRef, { score: Math.max(0, currentScore + difficultySettings.penalty) });
                 }
             }
         }
 
         async function startGame() {
+            // 게임 설정값 가져오기
+            selectedCategories = [...categorySelector.querySelectorAll('.selected')].map(btn => btn.dataset.category);
+            totalRounds = parseInt(roundsInput.value) || 10;
+            roundTimeLimit = parseInt(timeLimitInput.value) || 30;
+
+            if (selectedCategories.length === 0) {
+                alert('하나 이상의 카테고리를 선택해주세요.');
+                return;
+            }
+
             setupAudio();
-            listenForActions(); // 게임 시작 시 액션 리스너 활성화
+            listenForActions();
             
             lobbyScreen.classList.add('hidden');
             gameScreen.classList.remove('hidden');
@@ -362,14 +447,23 @@
                 players[id].character = new PlayerCharacter(id, players[id].name);
             });
 
-            await updateDoc(doc(db, "games", gameId), { state: "playing" });
+            await updateDoc(doc(db, "games", gameId), { 
+                state: "playing",
+                settings: {
+                    categories: selectedCategories,
+                    rounds: totalRounds,
+                    time: roundTimeLimit
+                }
+            });
             
-            currentRound = 0;
-            nextRound();
+            let currentRound = 0;
+            nextRound(currentRound);
             animate();
         }
-
+        
+        let currentRound = 0;
         async function nextRound() {
+            clearInterval(roundTimerId);
             if (currentRound >= totalRounds) {
                 endGame();
                 return;
@@ -380,11 +474,23 @@
 
             enemies = [];
             particles = [];
+            beams = [];
             roundCounterEl.textContent = `${currentRound} / ${totalRounds}`;
+            startRoundTimer();
+
+            let filteredVerses = versesData;
+            if (!selectedCategories.includes('전체')) {
+                filteredVerses = versesData.filter(v => v.카테고리 && selectedCategories.includes(v.카테고리));
+            }
+            if (filteredVerses.length === 0) {
+                alert('선택한 카테고리에 해당하는 말씀 구절이 없습니다. 게임을 종료합니다.');
+                endGame();
+                return;
+            }
 
             let verse, words, blankIndex;
             do {
-                verse = versesData[Math.floor(Math.random() * versesData.length)];
+                verse = filteredVerses[Math.floor(Math.random() * filteredVerses.length)];
                 words = verse.본문.split(' ').filter(w => w.trim().length > 0);
             } while (words.length < 3);
 
@@ -420,6 +526,20 @@
             });
         }
         
+        function startRoundTimer() {
+            let timeLeft = roundTimeLimit;
+            timerEl.textContent = timeLeft;
+            roundTimerId = setInterval(() => {
+                timeLeft--;
+                timerEl.textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(roundTimerId);
+                    roundActive = false;
+                    setTimeout(() => nextRound(), 2000); // 시간 초과 시 2초 후 다음 라운드
+                }
+            }, 1000);
+        }
+
         function animate() {
             if (gameScreen.classList.contains('hidden')) return;
             requestAnimationFrame(animate);
@@ -429,6 +549,10 @@
                 if(players[id].character) players[id].character.draw();
             }
             enemies.forEach(e => e.update());
+            beams.forEach((b, i) => {
+                if (b.y < -b.height) beams.splice(i, 1);
+                else b.update();
+            });
             particles.forEach((p, i) => {
                 if (p.life <= 0) particles.splice(i, 1);
                 else p.update();
@@ -437,7 +561,7 @@
 
         async function endGame() {
             playFinishSound();
-            if (actionsUnsubscribe) actionsUnsubscribe(); // 리스너 정리
+            if (actionsUnsubscribe) actionsUnsubscribe();
             
             gameScreen.classList.add('hidden');
             resultScreen.classList.remove('hidden');
@@ -447,7 +571,7 @@
             finalRanking.innerHTML = '';
             sortedPlayers.forEach((p, index) => {
                 const div = document.createElement('div');
-                const rankEmoji = ['🥇', '🥈', '�'][index] || `${index + 1}위`;
+                const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
                 div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
                 div.innerHTML = `
                     <span class="font-bold">${rankEmoji} ${p.name}</span>
@@ -457,7 +581,6 @@
             });
         }
 
-        // --- Event Listeners ---
         startGameButton.addEventListener('click', startGame);
         restartButton.addEventListener('click', () => window.location.reload());
         
@@ -470,12 +593,37 @@
             }, 1500);
         });
 
-        // --- Initial Load ---
         async function loadDataAndInit() {
             try {
                 const response = await fetch('verses.json');
                 if (!response.ok) throw new Error('verses.json을 불러올 수 없습니다.');
                 versesData = await response.json();
+                
+                // 카테고리 선택 UI 생성
+                const categories = ['전체', ...new Set(versesData.map(v => v.카테고리).filter(Boolean))];
+                categorySelector.innerHTML = '';
+                categories.forEach(cat => {
+                    const btn = document.createElement('button');
+                    btn.textContent = cat;
+                    btn.dataset.category = cat;
+                    btn.className = 'category-btn p-2 border rounded-md bg-white hover:bg-sky-200 transition';
+                    if (cat === '전체') {
+                        btn.classList.add('selected');
+                    }
+                    btn.addEventListener('click', () => {
+                        btn.classList.toggle('selected');
+                        // '전체'를 선택하면 다른 것들은 해제, 다른 것을 선택하면 '전체'는 해제
+                        if (btn.dataset.category === '전체' && btn.classList.contains('selected')) {
+                            categorySelector.querySelectorAll('.category-btn').forEach(b => {
+                                if (b !== btn) b.classList.remove('selected');
+                            });
+                        } else if (btn.dataset.category !== '전체' && btn.classList.contains('selected')) {
+                             categorySelector.querySelector('[data-category="전체"]').classList.remove('selected');
+                        }
+                    });
+                    categorySelector.appendChild(btn);
+                });
+
                 await initializeHost();
             } catch (error) {
                 console.error("초기화 오류:", error);
