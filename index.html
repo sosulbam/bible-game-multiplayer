@@ -30,7 +30,8 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
                     <div>
                         <label class="font-bold">카테고리 선택 (다중 선택 가능):</label>
-                        <div id="category-selector" class="mt-2 flex flex-wrap gap-2 p-2 bg-gray-100 rounded-md max-h-32 overflow-y-auto">
+                        <div id="category-selector" class="mt-2 flex flex-wrap gap-2 p-2 bg-gray-100 rounded-md max-h-48 overflow-y-auto">
+                            <!-- 카테고리 버튼이 여기에 동적으로 추가됩니다 -->
                         </div>
                     </div>
                     <div class="space-y-3">
@@ -39,8 +40,8 @@
                             <input type="number" id="rounds-input" value="10" min="5" max="50" step="1" class="w-full p-2 border rounded-md">
                         </div>
                         <div>
-                            <label for="time-limit-input" class="font-bold">라운드 당 시간 (초):</label>
-                            <input type="number" id="time-limit-input" value="30" min="10" max="120" step="5" class="w-full p-2 border rounded-md">
+                            <label for="time-limit-input" class="font-bold">총 게임 시간 (분):</label>
+                            <input type="number" id="time-limit-input" value="3" min="1" max="10" step="1" class="w-full p-2 border rounded-md">
                         </div>
                     </div>
                 </div>
@@ -83,13 +84,13 @@
                         <p id="question-text" class="text-xl text-gray-800 mt-1"></p>
                     </div>
                     <div>
-                        <span class="font-bold text-xl">시간:</span>
-                        <span id="timer" class="font-bold text-xl">30</span>
+                        <span class="font-bold text-xl">남은 시간:</span>
+                        <span id="timer" class="font-bold text-xl">03:00</span>
                     </div>
                 </div>
             </div>
             <canvas id="gameCanvas"></canvas>
-            <div id="scoreboard" class="mt-2 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2"></div>
+            <div id="scoreboard" class="mt-2 flex flex-wrap justify-center gap-2"></div>
         </div>
         
         <!-- 결과 화면 -->
@@ -106,8 +107,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, collection, onSnapshot, updateDoc, addDoc, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        // ===============================================================
-        // 1단계에서 생성한 Firebase 설정 코드를 붙여넣으세요.
         const firebaseConfig = {
             apiKey: "AIzaSyBCNjgy_28rzMu66Si9W4U6y6sZ6kffIPk",
             authDomain: "verse-game.firebaseapp.com",
@@ -116,7 +115,6 @@
             messagingSenderId: "84261757024",
             appId: "1:84261757024:web:9f59c6bf44ab0ebb982305"
         };
-        // ===============================================================
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -153,13 +151,13 @@
         let enemies = [];
         let particles = [];
         let beams = [];
-        let roundTimerId = null;
+        let gameTimerId = null;
         let roundActive = false;
         let synth;
 
         let selectedCategories = [];
         let totalRounds = 10;
-        let roundTimeLimit = 30;
+        let totalGameTime = 180;
 
         const difficultySettings = {
             speed: 0.5, 
@@ -218,6 +216,7 @@
                 this.speed = (Math.random() * 0.5 + 0.8) * difficultySettings.speed;
                 this.word = word; this.isCorrect = isCorrect;
                 this.number = number;
+                ctx.font = 'bold 24px Gowun Dodum';
                 this.width = ctx.measureText(this.word).width + 40;
                 this.height = 50;
 
@@ -236,11 +235,15 @@
             }
             draw() {
                 ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
-                ctx.fillStyle = '#FFF';
-                ctx.font = '18px Gowun Dodum';
+                ctx.font = 'bold 24px Gowun Dodum';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(this.word, this.x + this.width / 2, this.y + this.height / 2);
+                
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 5;
+                ctx.strokeText(this.word, this.x + this.width / 2, this.y + this.height / 2 + 2);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillText(this.word, this.x + this.width / 2, this.y + this.height / 2 + 2);
                 
                 ctx.font = 'bold 22px Arial';
                 ctx.fillStyle = 'yellow';
@@ -279,18 +282,20 @@
                 this.x = x;
                 this.y = y;
                 this.color = color;
-                this.width = 10;
-                this.height = y; // 빔 길이를 캔버스 상단까지로 설정
+                this.width = 15;
+                this.life = 15; // 15 프레임(약 0.25초) 동안 지속
             }
             draw() {
-                const gradient = ctx.createLinearGradient(this.x, this.y, this.x, 0);
-                gradient.addColorStop(0, this.color);
-                gradient.addColorStop(1, 'rgba(255,255,255,0)');
-                ctx.fillStyle = gradient;
+                const alpha = this.life / 15;
+                ctx.fillStyle = `rgba(${this.color.replace('rgb(','').replace(')','')}, ${alpha * 0.8})`;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 20;
                 ctx.fillRect(this.x - this.width / 2, 0, this.width, this.y);
+                ctx.shadowBlur = 0;
             }
             update() {
-                // 빔은 발사 즉시 그려지고 사라짐
+                this.life--;
+                this.draw();
             }
         }
         
@@ -429,7 +434,7 @@
         async function startGame() {
             selectedCategories = [...categorySelector.querySelectorAll('.selected')].map(btn => btn.dataset.category);
             totalRounds = parseInt(roundsInput.value) || 10;
-            roundTimeLimit = parseInt(timeLimitInput.value) || 30;
+            totalGameTime = (parseInt(timeLimitInput.value) || 3) * 60;
 
             if (selectedCategories.length === 0) {
                 alert('하나 이상의 카테고리를 선택해주세요.');
@@ -454,18 +459,18 @@
                 settings: {
                     categories: selectedCategories,
                     rounds: totalRounds,
-                    time: roundTimeLimit
+                    time: totalGameTime
                 }
             });
             
             let currentRound = 0;
             nextRound(currentRound);
+            startTotalGameTimer();
             animate();
         }
         
         let currentRound = 0;
         async function nextRound() {
-            clearInterval(roundTimerId);
             if (currentRound >= totalRounds) {
                 endGame();
                 return;
@@ -478,8 +483,7 @@
             particles = [];
             beams = [];
             roundCounterEl.textContent = `${currentRound} / ${totalRounds}`;
-            startRoundTimer();
-
+            
             let filteredVerses = versesData;
             if (!selectedCategories.includes('전체')) {
                 filteredVerses = versesData.filter(v => v.카테고리 && selectedCategories.includes(v.카테고리));
@@ -528,18 +532,16 @@
             });
         }
         
-        function startRoundTimer() {
-            let timeLeft = roundTimeLimit;
-            timerEl.textContent = timeLeft;
-            roundTimerId = setInterval(() => {
+        function startTotalGameTimer() {
+            let timeLeft = totalGameTime;
+            gameTimerId = setInterval(() => {
                 timeLeft--;
-                timerEl.textContent = timeLeft;
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                timerEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                
                 if (timeLeft <= 0) {
-                    clearInterval(roundTimerId);
-                    if (roundActive) {
-                        roundActive = false;
-                        setTimeout(() => nextRound(), 2000);
-                    }
+                    endGame();
                 }
             }, 1000);
         }
@@ -552,13 +554,25 @@
             for (const id in players) {
                 if(players[id].character) players[id].character.draw();
             }
-            enemies.forEach(e => e.update());
+            
+            enemies.forEach((e, i) => {
+                if (e.y > canvas.height) {
+                    enemies.splice(i, 1);
+                } else {
+                    e.update();
+                }
+            });
+
+            if (roundActive && enemies.length === 0) {
+                roundActive = false;
+                setTimeout(() => nextRound(), 1500);
+            }
+
             beams.forEach((b, i) => {
-                b.height -= b.speed;
-                if (b.height <= 0) {
+                if (b.life <= 0) {
                     beams.splice(i, 1);
                 } else {
-                    b.draw();
+                    b.update();
                 }
             });
             particles.forEach((p, i) => {
@@ -568,6 +582,9 @@
         }
 
         async function endGame() {
+            if (gameScreen.classList.contains('hidden')) return; // 이미 종료된 경우 중복 실행 방지
+            
+            clearInterval(gameTimerId);
             playFinishSound();
             if (actionsUnsubscribe) actionsUnsubscribe();
             
@@ -579,7 +596,7 @@
             finalRanking.innerHTML = '';
             sortedPlayers.forEach((p, index) => {
                 const div = document.createElement('div');
-                const rankEmoji = ['🥇', '🥈', '�'][index] || `${index + 1}위`;
+                const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
                 div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
                 div.innerHTML = `
                     <span class="font-bold">${rankEmoji} ${p.name}</span>
