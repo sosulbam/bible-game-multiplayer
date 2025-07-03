@@ -14,7 +14,7 @@
     <style>
         body { font-family: 'Gowun Dodum', sans-serif; background-color: #f0f9ff; }
         canvas { background: linear-gradient(to bottom, #38bdf8, #e0f2fe); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .category-btn.selected, .mode-btn.selected { background-color: #0ea5e9; color: white; }
+        .category-btn.selected, .mode-btn.selected, .theme-btn.selected { background-color: #0ea5e9; color: white; }
         .player-item { cursor: pointer; transition: background-color 0.2s; }
         .player-item:hover { background-color: #dbeafe; }
     </style>
@@ -29,20 +29,30 @@
             
             <div class="max-w-4xl mx-auto bg-white/70 p-4 rounded-lg shadow-md mb-6">
                 <h3 class="text-xl font-bold text-gray-700 mb-3">게임 설정</h3>
-                <div class="mb-4 flex justify-center items-center gap-4">
+                <div class="mb-4 flex justify-center items-center gap-6">
                     <div>
                         <label class="font-bold">게임 모드:</label>
                         <div id="game-mode-selector" class="inline-flex rounded-md shadow-sm" role="group">
-                          <button type="button" data-mode="personal" class="mode-btn selected py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-200 hover:bg-gray-100">
-                            개인전
-                          </button>
-                          <button type="button" data-mode="team" class="mode-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-r-md border border-gray-200 hover:bg-gray-100">
-                            팀전
-                          </button>
+                          <button type="button" data-mode="personal" class="mode-btn selected py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-200 hover:bg-gray-100">개인전</button>
+                          <button type="button" data-mode="team" class="mode-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-r-md border border-gray-200 hover:bg-gray-100">팀전</button>
                         </div>
                     </div>
-                    <div id="team-assign-controls" class="hidden">
-                        <button id="auto-assign-btn" class="py-2 px-4 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600">팀 균등 분배</button>
+                    <div id="team-settings-container" class="hidden flex items-center gap-6">
+                        <div>
+                            <label class="font-bold">팀 이름 테마:</label>
+                            <div id="team-theme-selector" class="inline-flex rounded-md shadow-sm" role="group">
+                                <button type="button" data-theme="animals" class="theme-btn selected py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-200 hover:bg-gray-100">동물</button>
+                                <button type="button" data-theme="bible" class="theme-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-r-md border border-gray-200 hover:bg-gray-100">성경 인물</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-bold">팀 배정 방식:</label>
+                            <div id="team-assign-selector" class="inline-flex rounded-md shadow-sm" role="group">
+                                <button type="button" data-assign="auto" class="assign-btn selected py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-200 hover:bg-gray-100">자동 배정</button>
+                                <button type="button" data-assign="choice" class="assign-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-r-md border border-gray-200 hover:bg-gray-100">참가자 선택</button>
+                            </div>
+                        </div>
+                        <button id="reshuffle-btn" class="py-2 px-4 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600">팀 재분배</button>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
@@ -182,8 +192,10 @@
         const teamBNameEl = document.getElementById('team-b-name');
         const teamAListEl = document.getElementById('team-a-list');
         const teamBListEl = document.getElementById('team-b-list');
-        const autoAssignBtn = document.getElementById('auto-assign-btn');
-        const teamAssignControls = document.getElementById('team-assign-controls');
+        const teamAssignSelector = document.getElementById('team-assign-selector');
+        const reshuffleBtn = document.getElementById('reshuffle-btn');
+        const teamSettingsContainer = document.getElementById('team-settings-container');
+        const teamThemeSelector = document.getElementById('team-theme-selector');
         const pauseGameBtn = document.getElementById('pause-game-btn');
         const forceEndGameBtn = document.getElementById('force-end-game-btn');
 
@@ -191,6 +203,8 @@
         let players = {};
         let teams = {};
         let gameMode = 'personal';
+        let assignMode = 'auto';
+        let teamTheme = 'animals';
         let playersUnsubscribe, actionsUnsubscribe;
         let versesData = [];
         let currentBlankWord;
@@ -212,8 +226,11 @@
             penalty: -5
         };
 
-        const animalNames = ["🦁 사자", "🐯 호랑이", "🐻 곰", "🦊 여우", "🦅 독수리", "🦄 유니콘", "🐉 용", "🐘 코끼리", "🐬 돌고래", "🦈 상어"];
-
+        const teamNameThemes = {
+            animals: ["🦁 사자", "🐯 호랑이", "🐻 곰", "🦊 여우", "🦅 독수리", "🦄 유니콘", "🐉 용", "🐘 코끼리", "🐬 돌고래", "🦈 상어"],
+            bible: ["베드로", "야고보", "요한", "바울", "드보라", "한나", "모세", "아브라함", "마리아", "다윗", "라헬", "리브가", "룻"]
+        };
+        
         class PlayerCharacter {
             constructor(id, name, teamId) {
                 this.id = id;
@@ -362,21 +379,23 @@
 
 
         async function initializeHost() {
-            const teamAIndex = Math.floor(Math.random() * animalNames.length);
+            const nameTheme = teamNameThemes[teamTheme];
+            const teamAIndex = Math.floor(Math.random() * nameTheme.length);
             let teamBIndex;
             do {
-                teamBIndex = Math.floor(Math.random() * animalNames.length);
+                teamBIndex = Math.floor(Math.random() * nameTheme.length);
             } while (teamAIndex === teamBIndex);
             
             teams = {
-                teamA: { name: animalNames[teamAIndex], score: 0 },
-                teamB: { name: animalNames[teamBIndex], score: 0 }
+                teamA: { name: nameTheme[teamAIndex], score: 0 },
+                teamB: { name: nameTheme[teamBIndex], score: 0 }
             };
 
             const gameRef = await addDoc(collection(db, "games"), {
                 state: "lobby",
                 createdAt: serverTimestamp(),
                 mode: gameMode,
+                assignMode: assignMode,
                 teams: teams
             });
             gameId = gameRef.id;
@@ -395,14 +414,30 @@
                 snapshot.forEach(doc => {
                     currentPlayersInDB[doc.id] = doc.data();
                 });
+
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === "added") {
+                        const newPlayerId = change.doc.id;
+                        const newPlayerData = change.doc.data();
+                        if (gameMode === 'team' && assignMode === 'auto' && !newPlayerData.team) {
+                            const teamAPlayers = Object.values(players).filter(p => p.team === 'teamA').length;
+                            const teamBPlayers = Object.values(players).filter(p => p.team === 'teamB').length;
+                            const teamToAssign = teamAPlayers <= teamBPlayers ? 'teamA' : 'teamB';
+                            updateDoc(doc(db, "games", gameId, "players", newPlayerId), { team: teamToAssign });
+                        }
+                    }
+                });
+
                 players = {};
                 for (const id in currentPlayersInDB) {
                     players[id] = { ...currentPlayersInDB[id], character: null };
                 }
+                
                 updatePlayerListUI();
                 if (gameMode === 'personal') {
                     updateScoreboard(players);
                 }
+                
                 if (Object.keys(players).length > 0) {
                     startGameButton.disabled = false;
                 } else {
@@ -442,7 +477,7 @@
                 if (gameMode === 'team') {
                     if (playerData.team === 'teamA') teamAListEl.appendChild(li);
                     else if (playerData.team === 'teamB') teamBListEl.appendChild(li);
-                    else playerList.appendChild(li); // 아직 팀 없는 플레이어
+                    else playerList.appendChild(li); 
                 } else {
                     playerList.appendChild(li);
                 }
@@ -691,7 +726,7 @@
                 const winningPlayers = Object.values(players).filter(p => p.team === winnerTeamId);
                 const mvp = winningPlayers.sort((a, b) => b.score - a.score)[0];
 
-                resultTitle.textContent = `🎉 ${winnerTeam.name} 승리! 🎉`;
+                resultTitle.textContent = `🎉 ${winnerTeam.name} 팀 승리! 🎉`;
                 finalRanking.innerHTML = `
                     <div class="p-6 bg-green-100 border-2 border-green-500 rounded-lg shadow-lg">
                         <h3 class="text-3xl font-bold text-green-700">${winnerTeam.name}</h3>
@@ -708,7 +743,7 @@
                 finalRanking.innerHTML = '';
                 sortedPlayers.forEach((p, index) => {
                     const div = document.createElement('div');
-                    const rankEmoji = ['🥇', '🥈', '�'][index] || `${index + 1}위`;
+                    const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
                     div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
                     div.innerHTML = `<span class="font-bold">${rankEmoji} ${p.name}</span><span>${p.score}점</span>`;
                     finalRanking.appendChild(div);
@@ -747,37 +782,55 @@
                     playerListContainer.classList.add('hidden');
                     teamDisplay.classList.add('grid');
                     teamDisplay.classList.remove('hidden');
-                    teamAssignControls.classList.remove('hidden');
+                    teamSettingsContainer.classList.remove('hidden');
                     teamANameEl.textContent = teams.teamA.name;
                     teamBNameEl.textContent = teams.teamB.name;
                 } else {
                     playerListContainer.classList.remove('hidden');
                     teamDisplay.classList.add('hidden');
                     teamDisplay.classList.remove('grid');
-                    teamAssignControls.classList.add('hidden');
+                    teamSettingsContainer.classList.add('hidden');
                 }
                 updatePlayerListUI();
             }
         });
 
-        async function handleManualAssign(e) {
-            if (!e.target.dataset.playerId) return;
-            const playerId = e.target.dataset.playerId;
-            const newTeam = prompt(`'${players[playerId].name}'님을 어느 팀으로 배정할까요? (A 또는 B)`);
-            if (newTeam && (newTeam.toUpperCase() === 'A' || newTeam.toUpperCase() === 'B')) {
-                await updateDoc(doc(db, "games", gameId, "players", playerId), {
-                    team: `team${newTeam.toUpperCase()}`
-                });
+        teamThemeSelector.addEventListener('click', async (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                teamTheme = e.target.dataset.theme;
+                teamThemeSelector.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('selected'));
+                e.target.classList.add('selected');
+                
+                const nameTheme = teamNameThemes[teamTheme];
+                const teamAIndex = Math.floor(Math.random() * nameTheme.length);
+                let teamBIndex;
+                do {
+                    teamBIndex = Math.floor(Math.random() * nameTheme.length);
+                } while (teamAIndex === teamBIndex);
+                
+                teams = {
+                    teamA: { name: nameTheme[teamAIndex], score: 0 },
+                    teamB: { name: nameTheme[teamBIndex], score: 0 }
+                };
+                teamANameEl.textContent = teams.teamA.name;
+                teamBNameEl.textContent = teams.teamB.name;
+                await updateDoc(doc(db, "games", gameId), { teams: teams });
             }
-        }
-        playerList.addEventListener('click', handleManualAssign);
-        teamAListEl.addEventListener('click', handleManualAssign);
-        teamBListEl.addEventListener('click', handleManualAssign);
+        });
 
-        autoAssignBtn.addEventListener('click', async () => {
+        teamAssignSelector.addEventListener('click', async (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                assignMode = e.target.dataset.assign;
+                teamAssignSelector.querySelectorAll('.assign-btn').forEach(btn => btn.classList.remove('selected'));
+                e.target.classList.add('selected');
+                await updateDoc(doc(db, "games", gameId), { assignMode: assignMode });
+            }
+        });
+
+        reshuffleBtn.addEventListener('click', async () => {
             const batch = writeBatch(db);
             const playerIds = Object.keys(players);
-            playerIds.sort(() => Math.random() - 0.5); // Shuffle for randomness
+            playerIds.sort(() => Math.random() - 0.5); 
             playerIds.forEach((id, index) => {
                 const team = index % 2 === 0 ? 'teamA' : 'teamB';
                 const playerRef = doc(db, "games", gameId, "players", id);
