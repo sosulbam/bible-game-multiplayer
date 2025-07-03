@@ -36,7 +36,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, addDoc, collection, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, addDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBCNjgy_28rzMu66Si9W4U6y6sZ6kffIPk",
@@ -68,8 +68,8 @@
         
         const gameRef = doc(db, "games", gameId);
 
-        // 게임 설정을 먼저 가져와서 UI를 결정
-        getDoc(gameRef).then(docSnap => {
+        // 실시간으로 게임 설정을 감지하여 UI 변경
+        onSnapshot(gameRef, (docSnap) => {
             if (docSnap.exists()) {
                 const gameData = docSnap.data();
                 if (gameData.mode === 'team' && gameData.assignMode === 'choice') {
@@ -77,6 +77,9 @@
                     autoJoinBtn.classList.add('hidden');
                     joinTeamABtn.textContent = gameData.teams.teamA.name;
                     joinTeamBBtn.textContent = gameData.teams.teamB.name;
+                } else {
+                    teamChoiceContainer.classList.add('hidden');
+                    autoJoinBtn.classList.remove('hidden');
                 }
             }
         });
@@ -100,8 +103,8 @@
                 const playersRef = collection(db, "games", gameId, "players");
                 const playerDocRef = await addDoc(playersRef, playerData);
 
-                onSnapshot(gameRef, (doc) => {
-                    const gameData = doc.data();
+                onSnapshot(gameRef, (gameDoc) => {
+                    const gameData = gameDoc.data();
                     if (gameData.state === "playing") {
                         window.location.href = `controller.html?gameId=${gameId}&playerId=${playerDocRef.id}`;
                     }

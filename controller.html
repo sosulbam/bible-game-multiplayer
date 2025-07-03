@@ -1,3 +1,4 @@
+
 <!-- ======================================================================= -->
 <!-- =====================   controller.html (참가자 화면)   ===================== -->
 <!-- ======================================================================= -->
@@ -44,7 +45,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, updateDoc, onSnapshot, addDoc, collection } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBCNjgy_28rzMu66Si9W4U6y6sZ6kffIPk",
@@ -79,21 +80,24 @@
         const roundMessageEl = document.getElementById('round-message');
 
         let myTeamId = null;
+        let gameDataCache = null;
+
+        function updateTeamName() {
+            if (gameDataCache && gameDataCache.mode === 'team' && myTeamId && gameDataCache.teams) {
+                teamNameDisplay.textContent = `소속: ${gameDataCache.teams[myTeamId].name}`;
+            } else {
+                teamNameDisplay.textContent = '';
+            }
+        }
 
         onSnapshot(gameRef, (doc) => {
-            const gameData = doc.data();
-            if (gameData.state === "playing") {
+            gameDataCache = doc.data();
+            if (gameDataCache.state === "playing") {
                 controllerUI.classList.remove('hidden');
                 waitingScreen.classList.add('hidden');
-                roundMessageEl.textContent = `문제 ${gameData.currentRound}`;
-
-                if (gameData.mode === 'team' && myTeamId && gameData.teams) {
-                    teamNameDisplay.textContent = `소속: ${gameData.teams[myTeamId].name}`;
-                } else {
-                    teamNameDisplay.textContent = '';
-                }
-
-            } else if (gameData.state === "finished") {
+                roundMessageEl.textContent = `문제 ${gameDataCache.currentRound}`;
+                updateTeamName();
+            } else if (gameDataCache.state === "finished") {
                 controllerUI.classList.add('hidden');
                 waitingScreen.classList.remove('hidden');
                 waitingScreen.innerHTML = `<p class="text-2xl text-gray-700">게임 종료! 메인 화면에서 순위를 확인하세요.</p>`
@@ -106,6 +110,7 @@
                 playerNameEl.textContent = playerData.name;
                 playerScoreEl.textContent = playerData.score;
                 myTeamId = playerData.team;
+                updateTeamName();
             }
         });
 
