@@ -501,7 +501,8 @@
         
         function listenForActions() {
             const actionsRef = collection(db, "games", gameId, "actions");
-            actionsUnsubscribe = onSnapshot(query(actionsRef, where("timestamp", ">", new Date())), (snapshot) => {
+            // ## ERROR FIX: Reverted to the original, simpler listener without the 'where' clause. ##
+            actionsUnsubscribe = onSnapshot(actionsRef, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === "added") {
                         const action = change.doc.data();
@@ -577,7 +578,7 @@
                 return;
             }
             setupAudio();
-            listenForActions();
+            listenForActions(); // This function will now run without error.
             lobbyScreen.classList.add('hidden');
             gameScreen.classList.remove('hidden');
             canvas.width = document.getElementById('game-container').clientWidth;
@@ -788,24 +789,20 @@
         }
 
         function generateDistractors(correctWord, allVerses) {
-            // 1. 모든 단어로 후보군 생성 (약간 완화된 필터)
             const candidatePool = Array.from(new Set(
                 allVerses
                     .flatMap(v => v.본문.split(' '))
-                    .map(w => w.replace(/[.,!?]/g, '')) // 구두점 제거
+                    .map(w => w.replace(/[.,!?]/g, ''))
                     .filter(w => w.length > 1 && w !== correctWord)
             ));
 
-            // 2. 후보군 무작위로 섞기 (Fisher-Yates shuffle)
             for (let i = candidatePool.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [candidatePool[i], candidatePool[j]] = [candidatePool[j], candidatePool[i]];
             }
             
-            // 3. 2개의 오답 보기 선택
             const distractors = new Set(candidatePool.slice(0, 2));
 
-            // 4. 안전장치: 만약 오답 보기가 2개 미만일 경우, 일반 단어로 채우기
             const genericDistractors = ["사랑", "믿음", "소망", "예수", "하나님", "천국", "기도", "말씀"];
             while (distractors.size < 2) {
                 const genericWord = genericDistractors[Math.floor(Math.random() * genericDistractors.length)];
