@@ -35,7 +35,16 @@
             <div class="mt-8">
                 <button id="start-game-button" class="bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-full text-2xl transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>게임 시작</button>
             </div>
-             <p class="mt-4 text-gray-500">게임 ID: <span id="game-id-display"></span></p>
+            <div class="mt-4 space-y-2">
+                 <p class="text-gray-500">게임 ID: <span id="game-id-display"></span></p>
+                 <div id="pc-join-url-container" class="mt-2 hidden">
+                    <p class="text-gray-600">PC 참가자용 주소:</p>
+                    <div class="flex items-center justify-center gap-2 mt-1">
+                        <input type="text" id="pc-join-url" class="w-full max-w-md p-2 border rounded-md bg-gray-100 text-center" readonly>
+                        <button id="copy-url-button" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-md transition">복사</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- 게임 화면 -->
@@ -99,6 +108,9 @@
         const playerCountEl = document.getElementById('player-count');
         const startGameButton = document.getElementById('start-game-button');
         const gameIdDisplay = document.getElementById('game-id-display');
+        const pcJoinUrlContainer = document.getElementById('pc-join-url-container');
+        const pcJoinUrlInput = document.getElementById('pc-join-url');
+        const copyUrlButton = document.getElementById('copy-url-button');
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const scoreboard = document.getElementById('scoreboard');
@@ -225,6 +237,11 @@
             gameIdDisplay.textContent = gameId;
 
             const joinUrl = `${window.location.origin}/join.html?gameId=${gameId}`;
+            
+            // PC 참가자용 URL 표시
+            pcJoinUrlInput.value = joinUrl;
+            pcJoinUrlContainer.classList.remove('hidden');
+
             const qr = qrcode(0, 'L');
             qr.addData(joinUrl);
             qr.make();
@@ -430,7 +447,7 @@
             finalRanking.innerHTML = '';
             sortedPlayers.forEach((p, index) => {
                 const div = document.createElement('div');
-                const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
+                const rankEmoji = ['🥇', '🥈', '�'][index] || `${index + 1}위`;
                 div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
                 div.innerHTML = `
                     <span class="font-bold">${rankEmoji} ${p.name}</span>
@@ -444,6 +461,15 @@
         startGameButton.addEventListener('click', startGame);
         restartButton.addEventListener('click', () => window.location.reload());
         
+        copyUrlButton.addEventListener('click', () => {
+            pcJoinUrlInput.select();
+            document.execCommand('copy');
+            copyUrlButton.textContent = '복사됨!';
+            setTimeout(() => {
+                copyUrlButton.textContent = '복사';
+            }, 1500);
+        });
+
         // --- Initial Load ---
         async function loadDataAndInit() {
             try {
