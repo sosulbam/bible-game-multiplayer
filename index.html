@@ -104,24 +104,33 @@
         </div>
 
         <div id="game-screen" class="hidden">
-            <div id="game-ui" class="mb-2 p-3 bg-white/60 backdrop-blur-sm rounded-lg shadow-md">
-                <div class="flex justify-between items-center text-gray-700">
-                    <div class="flex items-center gap-4">
-                        <span class="font-bold text-xl">문제:</span>
-                        <span id="round-counter" class="font-bold text-xl">0 / 10</span>
+            <div id="game-ui" class="mb-4 p-3 bg-white/80 backdrop-blur-sm rounded-xl shadow-lg flex justify-between items-center gap-6">
+                <div class="flex-none flex items-center divide-x divide-gray-300">
+                    <div class="px-4 text-center">
+                        <div class="text-sm text-gray-600">문제</div>
+                        <div id="round-counter" class="font-bold text-2xl text-sky-700">1 / 10</div>
                     </div>
-                    <div id="question-box" class="text-center">
-                        <p id="question-verse" class="text-2xl font-bold text-sky-800"></p>
-                        <p id="question-text" class="text-xl text-gray-800 mt-1"></p>
+                    <div class="px-4 text-center">
+                        <div class="text-sm text-gray-600">남은 시간</div>
+                        <div id="timer" class="font-bold text-2xl text-red-500">01:00</div>
                     </div>
-                    <div class="flex items-center gap-4">
-                        <div>
-                            <span class="font-bold text-xl">남은 시간:</span>
-                            <span id="timer" class="font-bold text-xl">01:00</span>
-                        </div>
-                        <button id="pause-game-btn" class="py-2 px-4 text-sm font-medium text-white bg-yellow-500 rounded-lg hover:bg-yellow-600">일시정지</button>
-                        <button id="force-end-game-btn" class="py-2 px-4 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600">즉시 종료</button>
-                    </div>
+                </div>
+                <div id="question-box" class="flex-grow text-center">
+                    <p id="question-verse" class="text-lg font-bold text-sky-800"></p>
+                    <p id="question-text" class="text-2xl text-gray-900 mt-1"></p>
+                </div>
+                <div class="flex-none flex items-center gap-2">
+                    <button id="sound-toggle-btn" class="p-2 rounded-full hover:bg-gray-200 transition">
+                        <svg id="sound-on-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        </svg>
+                        <svg id="sound-off-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l-2-2m0 0l-2-2m2 2l2 2m-2-2l2-2" />
+                        </svg>
+                    </button>
+                    <button id="pause-game-btn" class="py-2 px-4 text-sm font-medium text-white bg-yellow-500 rounded-lg hover:bg-yellow-600">일시정지</button>
+                    <button id="force-end-game-btn" class="py-2 px-4 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600">즉시 종료</button>
                 </div>
             </div>
             <canvas id="gameCanvas"></canvas>
@@ -153,11 +162,11 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        // --- DOM Elements ---
         const lobbyScreen = document.getElementById('lobby-screen');
         const gameScreen = document.getElementById('game-screen');
         const resultScreen = document.getElementById('result-screen');
         const qrcodeContainer = document.getElementById('qrcode');
-        const playerList = document.getElementById('player-list');
         const playerCountEl = document.getElementById('player-count');
         const startGameButton = document.getElementById('start-game-button');
         const gameIdDisplay = document.getElementById('game-id-display');
@@ -177,20 +186,31 @@
         const categorySelector = document.getElementById('category-selector');
         const roundsInput = document.getElementById('rounds-input');
         const timeLimitInput = document.getElementById('time-limit-input');
-        const gameModeSelector = document.getElementById('game-mode-selector');
+        
+        // Player & Team Lists
         const playerListContainer = document.getElementById('player-list-container');
+        const playerList = document.getElementById('player-list');
         const teamDisplay = document.getElementById('team-display');
         const teamANameEl = document.getElementById('team-a-name');
         const teamBNameEl = document.getElementById('team-b-name');
         const teamAListEl = document.getElementById('team-a-list');
         const teamBListEl = document.getElementById('team-b-list');
-        const teamAssignSelector = document.getElementById('team-assign-selector');
-        const reshuffleBtn = document.getElementById('reshuffle-btn');
+        
+        // Settings Selectors
+        const gameModeSelector = document.getElementById('game-mode-selector');
         const teamSettingsContainer = document.getElementById('team-settings-container');
         const teamThemeSelector = document.getElementById('team-theme-selector');
+        const teamAssignSelector = document.getElementById('team-assign-selector');
+        
+        // Buttons
+        const reshuffleBtn = document.getElementById('reshuffle-btn');
         const pauseGameBtn = document.getElementById('pause-game-btn');
         const forceEndGameBtn = document.getElementById('force-end-game-btn');
+        const soundToggleBtn = document.getElementById('sound-toggle-btn');
+        const soundOnIcon = document.getElementById('sound-on-icon');
+        const soundOffIcon = document.getElementById('sound-off-icon');
 
+        // --- State Variables ---
         let gameId;
         let players = {};
         let teams = {};
@@ -207,6 +227,7 @@
         let roundActive = false;
         let isGamePaused = false;
         let synth;
+        let isSoundEnabled = true;
 
         let selectedCategories = [];
         let totalRounds = 10;
@@ -358,18 +379,29 @@
             }
         }
         
+        // --- Audio Functions ---
         function setupAudio() {
             if (synth || (Tone.context && Tone.context.state === 'running')) return;
             Tone.start();
             synth = new Tone.PolySynth(Tone.Synth).toDestination();
         }
-        const playSound = (logic) => { if (synth) logic(); };
+        
+        const playSound = (logic) => {
+            if (synth && isSoundEnabled) logic();
+        };
+
         const playCorrectSound = () => playSound(() => synth.triggerAttackRelease(['C5', 'G5'], '8n'));
         const playIncorrectSound = () => playSound(() => synth.triggerAttackRelease('C3', '8n'));
         const playRoundStartSound = () => playSound(() => synth.triggerAttackRelease('C4', '8n'));
         const playFinishSound = () => playSound(() => synth.triggerAttackRelease(['C4', 'E4', 'G4', 'C5'], '4n'));
+        
+        function toggleSound() {
+            isSoundEnabled = !isSoundEnabled;
+            soundOnIcon.classList.toggle('hidden', !isSoundEnabled);
+            soundOffIcon.classList.toggle('hidden', isSoundEnabled);
+        }
 
-
+        // --- Core Game Logic ---
         async function initializeHost() {
             const nameTheme = teamNameThemes[teamTheme];
             const teamAIndex = Math.floor(Math.random() * nameTheme.length);
@@ -438,7 +470,7 @@
                 if (docSnap.exists() && docSnap.data().teams) {
                     const gameData = docSnap.data();
                     teams = gameData.teams;
-                    gameMode = gameData.mode; // Sync local gameMode with DB
+                    gameMode = gameData.mode;
                      if (gameMode === 'team') {
                         teamANameEl.textContent = teams.teamA.name;
                         teamBNameEl.textContent = teams.teamB.name;
@@ -501,7 +533,6 @@
         
         function listenForActions() {
             const actionsRef = collection(db, "games", gameId, "actions");
-            // ## ERROR FIX: Reverted to the original, simpler listener without the 'where' clause. ##
             actionsUnsubscribe = onSnapshot(actionsRef, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === "added") {
@@ -530,12 +561,10 @@
                         const playerDoc = await transaction.get(playerDocRef);
                         const gameDoc = await transaction.get(gameDocRef);
 
-                        if (!playerDoc.exists() || !gameDoc.exists()) {
-                            throw "Document does not exist!";
+                        if (!playerDoc.exists() || !gameDoc.exists() || !roundActive) {
+                            return;
                         }
                         
-                        if (!roundActive) return;
-
                         const currentScore = playerDoc.data().score || 0;
                         const currentTeam = playerDoc.data().team;
                         const currentTeams = gameDoc.data().teams;
@@ -578,11 +607,11 @@
                 return;
             }
             setupAudio();
-            listenForActions(); // This function will now run without error.
+            listenForActions();
             lobbyScreen.classList.add('hidden');
             gameScreen.classList.remove('hidden');
             canvas.width = document.getElementById('game-container').clientWidth;
-            canvas.height = Math.min(window.innerHeight * 0.6, 600);
+            canvas.height = Math.min(window.innerHeight * 0.7, 700);
             Object.keys(players).forEach(id => {
                 players[id].character = new PlayerCharacter(id, players[id].name, players[id].team);
             });
@@ -664,6 +693,7 @@
         
         function startTotalGameTimer() {
             let timeLeft = totalGameTime;
+            timerEl.textContent = `${String(Math.floor(timeLeft/60)).padStart(2, '0')}:${String(timeLeft%60).padStart(2, '0')}`;
             gameTimerId = setInterval(() => {
                 if(isGamePaused) return;
                 timeLeft--;
@@ -814,6 +844,7 @@
             return Array.from(distractors);
         }
 
+        // --- Event Listeners ---
         gameModeSelector.addEventListener('click', async (e) => {
             if (e.target.tagName !== 'BUTTON') return;
             
@@ -893,8 +924,8 @@
             pauseGameBtn.classList.toggle('bg-green-500', isGamePaused);
             if(gameId) updateDoc(doc(db,"games", gameId), { paused: isGamePaused });
         });
+        
         forceEndGameBtn.addEventListener('click', endGame);
-
         startGameButton.addEventListener('click', startGame);
         restartButton.addEventListener('click', () => window.location.reload());
         copyUrlButton.addEventListener('click', () => {
@@ -903,6 +934,7 @@
             copyUrlButton.textContent = '복사됨!';
             setTimeout(() => { copyUrlButton.textContent = '복사'; }, 1500);
         });
+        soundToggleBtn.addEventListener('click', toggleSound);
 
         async function loadDataAndInit() {
             try {

@@ -16,7 +16,8 @@
 
     <div id="controller-ui" class="fixed inset-0 flex flex-col justify-around p-4 hidden">
         <div class="text-center">
-            <p id="team-name-display" class="text-lg font-bold text-gray-500 mb-1"></p>
+            <div id="team-name-container" class="mb-3 h-12 flex justify-center items-center">
+                </div>
             <h2 id="player-name" class="text-2xl font-bold">플레이어</h2>
             <p class="text-4xl font-bold text-sky-600"><span id="player-score">0</span>점</p>
         </div>
@@ -73,7 +74,7 @@
         const waitingScreen = document.getElementById('waiting-screen');
         const playerNameEl = document.getElementById('player-name');
         const playerScoreEl = document.getElementById('player-score');
-        const teamNameDisplay = document.getElementById('team-name-display');
+        const teamNameContainer = document.getElementById('team-name-container');
         const targetBtns = document.querySelectorAll('.target-btn');
         const roundMessageEl = document.getElementById('round-message');
         const pausedOverlay = document.getElementById('paused-overlay');
@@ -88,10 +89,23 @@
                 playerScoreEl.textContent = playerDataCache.score;
             }
 
+            teamNameContainer.innerHTML = '';
             if (gameDataCache && playerDataCache && gameDataCache.mode === 'team' && playerDataCache.team && gameDataCache.teams) {
-                teamNameDisplay.textContent = `소속: ${gameDataCache.teams[playerDataCache.team].name}`;
-            } else {
-                teamNameDisplay.textContent = '';
+                const teamId = playerDataCache.team;
+                const teamData = gameDataCache.teams[teamId];
+                if (!teamData) return;
+
+                const isTeamA = teamId === 'teamA';
+                const teamDisplayDiv = document.createElement('div');
+                teamDisplayDiv.textContent = teamData.name;
+                
+                teamDisplayDiv.className = `inline-block px-6 py-2 rounded-full text-2xl font-bold shadow-md transition-all ${
+                    isTeamA 
+                    ? 'bg-blue-500 text-white ring-4 ring-blue-300' 
+                    : 'bg-red-500 text-white ring-4 ring-red-300'
+                }`;
+                
+                teamNameContainer.appendChild(teamDisplayDiv);
             }
         }
 
@@ -99,16 +113,18 @@
         onSnapshot(gameRef, (doc) => {
             gameDataCache = doc.data();
             
-            pausedOverlay.classList.toggle('hidden', !gameDataCache.paused);
+            if (gameDataCache) {
+                pausedOverlay.classList.toggle('hidden', !gameDataCache.paused);
 
-            if (gameDataCache.state === "playing") {
-                controllerUI.classList.remove('hidden');
-                waitingScreen.classList.add('hidden');
-                roundMessageEl.textContent = `문제 ${gameDataCache.currentRound}`;
-            } else if (gameDataCache.state === "finished") {
-                controllerUI.classList.add('hidden');
-                waitingScreen.classList.remove('hidden');
-                waitingScreen.innerHTML = `<p class="text-2xl text-gray-700">게임 종료! 메인 화면에서 순위를 확인하세요.</p>`
+                if (gameDataCache.state === "playing") {
+                    controllerUI.classList.remove('hidden');
+                    waitingScreen.classList.add('hidden');
+                    roundMessageEl.textContent = `문제 ${gameDataCache.currentRound || 1}`;
+                } else if (gameDataCache.state === "finished") {
+                    controllerUI.classList.add('hidden');
+                    waitingScreen.classList.remove('hidden');
+                    waitingScreen.innerHTML = `<p class="text-2xl text-gray-700">게임 종료! 메인 화면에서 순위를 확인하세요.</p>`
+                }
             }
             updateUI();
         });
