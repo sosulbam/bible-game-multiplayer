@@ -370,21 +370,43 @@
             qr.make();
             qrcodeContainer.innerHTML = qr.createImgTag(6);
             const playersRef = collection(db, "games", gameId, "players");
+            
             playersUnsubscribe = onSnapshot(playersRef, (snapshot) => {
-                const newPlayersData = {};
+                const currentPlayersInDB = {};
+                snapshot.forEach(doc => {
+                    currentPlayersInDB[doc.id] = doc.data();
+                });
+
+                // 새로 추가된 플레이어에게 팀 배정
                 snapshot.docChanges().forEach(change => {
                     if (change.type === "added") {
                         const newPlayerId = change.doc.id;
                         const newPlayerData = change.doc.data();
                         if (gameMode === 'team' && !newPlayerData.team) {
-                            assignTeam(newPlayerId);
+                            const teamAPlayers = Object.values(players).filter(p => p.team === 'teamA').length;
+                            const teamBPlayers = Object.values(players).filter(p => p.team === 'teamB').length;
+                            const teamToAssign = teamAPlayers <= teamBPlayers ? 'teamA' : 'teamB';
+                            updateDoc(doc(db, "games", gameId, "players", newPlayerId), { team: teamToAssign });
                         }
                     }
-                    newPlayersData[change.doc.id] = change.doc.data();
                 });
-                updatePlayerList(newPlayersData);
+
+                // 로컬 `players` 객체를 DB와 동기화
+                players = {};
+                for (const id in currentPlayersInDB) {
+                    players[id] = { ...currentPlayersInDB[id], character: null };
+                }
+                
+                updatePlayerListUI();
+
                 if (gameMode === 'personal') {
-                    updateScoreboard(newPlayersData);
+                    updateScoreboard(players);
+                }
+                
+                if (Object.keys(players).length > 0) {
+                    startGameButton.disabled = false;
+                } else {
+                    startGameButton.disabled = true;
                 }
             });
 
@@ -398,49 +420,30 @@
             });
         }
 
-        async function assignTeam(playerId) {
-            const teamAPlayers = Object.values(players).filter(p => p.team === 'teamA').length;
-            const teamBPlayers = Object.values(players).filter(p => p.team === 'teamB').length;
-            const teamToAssign = teamAPlayers <= teamBPlayers ? 'teamA' : 'teamB';
-            await updateDoc(doc(db, "games", gameId, "players", playerId), {
-                team: teamToAssign
-            });
-        }
-
-        function updatePlayerList(newPlayerData) {
+        function updatePlayerListUI() {
             playerList.innerHTML = '';
             teamAListEl.innerHTML = '';
             teamBListEl.innerHTML = '';
-            const playerIds = Object.keys(newPlayerData);
+            const playerIds = Object.keys(players);
             playerCountEl.textContent = playerIds.length;
             
             if (playerIds.length === 0) {
                 playerList.innerHTML = '<li class="text-gray-500">아직 참가자가 없습니다...</li>';
+                teamAListEl.innerHTML = '';
+                teamBListEl.innerHTML = '';
                 return;
             }
 
             playerIds.forEach(id => {
-                const playerData = newPlayerData[id];
+                const playerData = players[id];
                 const li = document.createElement('li');
                 li.textContent = `🐑 ${playerData.name}`;
 
                 if (gameMode === 'team') {
                     if (playerData.team === 'teamA') teamAListEl.appendChild(li);
                     else if (playerData.team === 'teamB') teamBListEl.appendChild(li);
-                    else playerList.appendChild(li); // 팀 배정 전
                 } else {
                     playerList.appendChild(li);
-                }
-                
-                if (!players[id]) {
-                    players[id] = { ...playerData, character: null };
-                } else {
-                    players[id] = { ...players[id], ...playerData };
-                }
-            });
-            Object.keys(players).forEach(id => {
-                if (!newPlayerData[id]) {
-                    delete players[id];
                 }
             });
         }
@@ -741,7 +744,7 @@
                     teamDisplay.classList.add('hidden');
                     teamDisplay.classList.remove('grid');
                 }
-                updatePlayerList(players);
+                updatePlayerListUI();
             }
         });
 
