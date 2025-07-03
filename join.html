@@ -1,3 +1,6 @@
+<!-- ======================================================================= -->
+<!-- ========================   join.html (참가 화면)   ======================== -->
+<!-- ======================================================================= -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -8,34 +11,41 @@
     <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap" rel="stylesheet">
     <style> body { font-family: 'Gowun Dodum', sans-serif; background-color: #f0f9ff; } </style>
 </head>
-<body class="flex items-center justify-center min-h-screen">
+<body class="flex items-center justify-center min-h-screen p-4">
 
     <div class="w-full max-w-sm p-8 bg-white rounded-2xl shadow-xl text-center">
         <h1 class="text-3xl font-bold text-sky-700 mb-6">게임 참여</h1>
-        <form id="join-form">
+        <div id="join-form">
             <input type="text" id="player-name" placeholder="이름을 입력하세요" class="w-full p-3 border rounded-md text-center text-lg mb-4" required>
-            <button type="submit" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-full text-xl transition">참여하기</button>
-        </form>
+            
+            <!-- 팀 선택 UI (동적으로 표시됨) -->
+            <div id="team-choice-container" class="hidden mb-4">
+                <p class="font-bold mb-2">팀을 선택하세요:</p>
+                <div class="flex justify-center gap-4">
+                    <button id="join-team-a" data-team="teamA" class="team-choice-btn flex-1 py-3 text-white font-bold rounded-lg bg-blue-500 hover:bg-blue-600 transition"></button>
+                    <button id="join-team-b" data-team="teamB" class="team-choice-btn flex-1 py-3 text-white font-bold rounded-lg bg-red-500 hover:bg-red-600 transition"></button>
+                </div>
+            </div>
+
+            <button id="auto-join-btn" type="button" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-full text-xl transition">참여하기</button>
+        </div>
         <div id="loading" class="hidden">
-            <p class="text-lg text-gray-600">게임 시작을 기다리는 중...</p>
+            <p class="text-lg text-gray-600 animate-pulse">게임 시작을 기다리는 중...</p>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, addDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, addDoc, collection, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        // ===============================================================
-        // 여기에 복사해 둔 Firebase 설정 코드를 붙여넣으세요.
-       const firebaseConfig = {
-    apiKey: "AIzaSyBCNjgy_28rzMu66Si9W4U6y6sZ6kffIPk",
-    authDomain: "verse-game.firebaseapp.com",
-    projectId: "verse-game",
-    storageBucket: "verse-game.firebasestorage.app",
-    messagingSenderId: "84261757024",
-    appId: "1:84261757024:web:9f59c6bf44ab0ebb982305"
-  };
-        // ===============================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBCNjgy_28rzMu66Si9W4U6y6sZ6kffIPk",
+            authDomain: "verse-game.firebaseapp.com",
+            projectId: "verse-game",
+            storageBucket: "verse-game.appspot.com",
+            messagingSenderId: "84261757024",
+            appId: "1:84261757024:web:9f59c6bf44ab0ebb982305"
+        };
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -43,6 +53,10 @@
         const joinForm = document.getElementById('join-form');
         const playerNameInput = document.getElementById('player-name');
         const loadingDiv = document.getElementById('loading');
+        const teamChoiceContainer = document.getElementById('team-choice-container');
+        const joinTeamABtn = document.getElementById('join-team-a');
+        const joinTeamBBtn = document.getElementById('join-team-b');
+        const autoJoinBtn = document.getElementById('auto-join-btn');
 
         const urlParams = new URLSearchParams(window.location.search);
         const gameId = urlParams.get('gameId');
@@ -51,9 +65,23 @@
             alert("잘못된 접근입니다. QR 코드를 다시 스캔해주세요.");
             window.location.href = "/";
         }
+        
+        const gameRef = doc(db, "games", gameId);
 
-        joinForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+        // 게임 설정을 먼저 가져와서 UI를 결정
+        getDoc(gameRef).then(docSnap => {
+            if (docSnap.exists()) {
+                const gameData = docSnap.data();
+                if (gameData.mode === 'team' && gameData.assignMode === 'choice') {
+                    teamChoiceContainer.classList.remove('hidden');
+                    autoJoinBtn.classList.add('hidden');
+                    joinTeamABtn.textContent = gameData.teams.teamA.name;
+                    joinTeamBBtn.textContent = gameData.teams.teamB.name;
+                }
+            }
+        });
+
+        async function joinGame(team = null) {
             const playerName = playerNameInput.value.trim();
             if (!playerName) {
                 alert("이름을 입력해주세요.");
@@ -61,19 +89,20 @@
             }
 
             try {
-                // players 서브컬렉션에 새로운 플레이어 추가
-                const playersRef = collection(db, "games", gameId, "players");
-                const playerDocRef = await addDoc(playersRef, {
+                const playerData = {
                     name: playerName,
                     score: 0
-                });
+                };
+                if (team) {
+                    playerData.team = team;
+                }
 
-                // 게임 시작을 감지하는 리스너 설정
-                const gameRef = doc(db, "games", gameId);
+                const playersRef = collection(db, "games", gameId, "players");
+                const playerDocRef = await addDoc(playersRef, playerData);
+
                 onSnapshot(gameRef, (doc) => {
                     const gameData = doc.data();
                     if (gameData.state === "playing") {
-                        // 게임이 시작되면 controller.html로 이동
                         window.location.href = `controller.html?gameId=${gameId}&playerId=${playerDocRef.id}`;
                     }
                 });
@@ -85,7 +114,12 @@
                 console.error("참여 오류:", error);
                 alert("게임 참여에 실패했습니다. 다시 시도해주세요.");
             }
-        });
+        }
+
+        autoJoinBtn.addEventListener('click', () => joinGame());
+        joinTeamABtn.addEventListener('click', () => joinGame('teamA'));
+        joinTeamBBtn.addEventListener('click', () => joinGame('teamB'));
+
     </script>
 </body>
 </html>
