@@ -1,0 +1,131 @@
+
+<!-- ======================================================================= -->
+<!-- =====================   controller.html (참가자 화면)   ===================== -->
+<!-- ======================================================================= -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>컨트롤러</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { touch-action: none; -webkit-user-select: none; user-select: none; font-family: 'Gowun Dodum', sans-serif; }
+        .control-btn { transition: transform 0.1s; }
+        .control-btn:active { transform: scale(0.95); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div id="controller-ui" class="fixed inset-0 flex flex-col justify-around p-4 hidden">
+        <!-- 상단 정보 -->
+        <div class="text-center">
+            <h2 id="player-name" class="text-2xl font-bold">플레이어</h2>
+            <p class="text-4xl font-bold text-sky-600"><span id="player-score">0</span>점</p>
+        </div>
+
+        <!-- 조준 공격 버튼 -->
+        <div class="flex justify-center items-center gap-4">
+            <button data-target="1" class="target-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg control-btn flex items-center justify-center">1</button>
+            <button data-target="2" class="target-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg control-btn flex items-center justify-center">2</button>
+            <button data-target="3" class="target-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg control-btn flex items-center justify-center">3</button>
+        </div>
+
+        <!-- 하단 메시지 -->
+        <div id="message-area" class="text-center h-10">
+            <p id="round-message" class="text-xl text-gray-600"></p>
+        </div>
+    </div>
+    
+    <div id="waiting-screen" class="fixed inset-0 flex items-center justify-center p-4">
+        <p class="text-2xl text-gray-700 animate-pulse">게임이 끝나면 여기에 결과가 표시됩니다.</p>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, doc, updateDoc, onSnapshot, addDoc, collection } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // ===============================================================
+        // 여기에 복사해 둔 Firebase 설정 코드를 붙여넣으세요.
+        const firebaseConfig = {
+    apiKey: "AIzaSyBCNjgy_28rzMu66Si9W4U6y6sZ6kffIPk",
+    authDomain: "verse-game.firebaseapp.com",
+    projectId: "verse-game",
+    storageBucket: "verse-game.firebasestorage.app",
+    messagingSenderId: "84261757024",
+    appId: "1:84261757024:web:9f59c6bf44ab0ebb982305"
+  };
+        // ===============================================================
+
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const gameId = urlParams.get('gameId');
+        const playerId = urlParams.get('playerId');
+
+        if (!gameId || !playerId) {
+            alert("잘못된 접근입니다.");
+            document.body.innerHTML = "잘못된 접근입니다. QR코드를 다시 스캔해주세요."
+        }
+
+        const gameRef = doc(db, "games", gameId);
+        const playerRef = doc(db, "games", gameId, "players", playerId);
+
+        // UI 요소
+        const controllerUI = document.getElementById('controller-ui');
+        const waitingScreen = document.getElementById('waiting-screen');
+        const playerNameEl = document.getElementById('player-name');
+        const playerScoreEl = document.getElementById('player-score');
+        const targetBtns = document.querySelectorAll('.target-btn');
+        const roundMessageEl = document.getElementById('round-message');
+
+        // 게임 상태 리스너
+        onSnapshot(gameRef, (doc) => {
+            const gameData = doc.data();
+            if (gameData.state === "playing") {
+                controllerUI.classList.remove('hidden');
+                waitingScreen.classList.add('hidden');
+                roundMessageEl.textContent = `문제 ${gameData.currentRound}`;
+            } else if (gameData.state === "finished") {
+                controllerUI.classList.add('hidden');
+                waitingScreen.classList.remove('hidden');
+                waitingScreen.innerHTML = `<p class="text-2xl text-gray-700">게임 종료! 메인 화면에서 순위를 확인하세요.</p>`
+            }
+        });
+
+        // 플레이어 정보 리스너
+        onSnapshot(playerRef, (doc) => {
+            const playerData = doc.data();
+            if(playerData) {
+                playerNameEl.textContent = playerData.name;
+                playerScoreEl.textContent = playerData.score;
+            }
+        });
+
+        // 액션 전송 함수
+        async function sendAction(type, payload = {}) {
+             await addDoc(collection(db, "games", gameId, "actions"), {
+                playerId,
+                type,
+                payload,
+                timestamp: new Date()
+            });
+        }
+        
+        // 이벤트 리스너
+        targetBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                sendAction('shoot', { target: btn.dataset.target });
+                // 버튼 비활성화로 중복 클릭 방지
+                targetBtns.forEach(b => b.disabled = true);
+                setTimeout(() => {
+                    targetBtns.forEach(b => b.disabled = false);
+                }, 1000); // 1초 후 다시 활성화
+            });
+        });
+        
+    </script>
+</body>
+</html>
