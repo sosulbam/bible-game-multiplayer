@@ -8,26 +8,34 @@
     <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap" rel="stylesheet">
     <style>
         body { touch-action: none; -webkit-user-select: none; user-select: none; font-family: 'Gowun Dodum', sans-serif; }
-        .control-btn { transition: transform 0.1s; }
-        .control-btn:active { transform: scale(0.95); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .control-btn, .mole-btn { transition: transform 0.1s; }
+        .control-btn:active, .mole-btn:active { transform: scale(0.95); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        #mole-whack-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; max-width: 400px; margin: 0 auto; }
+        .mole-btn { aspect-ratio: 1 / 1; background-color: #8B4513; border-radius: 15px; }
     </style>
 </head>
 <body class="bg-gray-100">
 
     <div id="controller-ui" class="fixed inset-0 flex flex-col justify-around p-4 hidden">
+        <!-- 상단 정보 -->
         <div class="text-center">
-            <div id="team-name-container" class="mb-3 h-12 flex justify-center items-center">
-                </div>
+            <div id="team-name-container" class="mb-3 h-12 flex justify-center items-center"></div>
             <h2 id="player-name" class="text-2xl font-bold">플레이어</h2>
             <p class="text-4xl font-bold text-sky-600"><span id="player-score">0</span>점</p>
         </div>
 
-        <div class="flex justify-center items-center gap-4">
-            <button data-target="1" class="target-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg control-btn flex items-center justify-center">1</button>
-            <button data-target="2" class="target-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg control-btn flex items-center justify-center">2</button>
-            <button data-target="3" class="target-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg control-btn flex items-center justify-center">3</button>
+        <!-- 게임별 컨트롤러 -->
+        <div id="fill-in-blank-controls" class="flex justify-center items-center gap-4">
+            <button data-target="1" class="target-btn control-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg flex items-center justify-center">1</button>
+            <button data-target="2" class="target-btn control-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg flex items-center justify-center">2</button>
+            <button data-target="3" class="target-btn control-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg flex items-center justify-center">3</button>
+        </div>
+        
+        <div id="mole-whack-controls" class="hidden">
+            <!-- 3x3 버튼이 여기에 동적으로 생성됩니다. -->
         </div>
 
+        <!-- 하단 메시지 -->
         <div id="message-area" class="text-center h-10">
             <p id="round-message" class="text-xl text-gray-600"></p>
         </div>
@@ -75,13 +83,35 @@
         const playerNameEl = document.getElementById('player-name');
         const playerScoreEl = document.getElementById('player-score');
         const teamNameContainer = document.getElementById('team-name-container');
-        const targetBtns = document.querySelectorAll('.target-btn');
         const roundMessageEl = document.getElementById('round-message');
         const pausedOverlay = document.getElementById('paused-overlay');
+        
+        const fillInBlankControls = document.getElementById('fill-in-blank-controls');
+        const moleWhackControls = document.getElementById('mole-whack-controls');
 
         let playerDataCache = null;
         let gameDataCache = null;
         let actionCooldown = false;
+
+        function setupControllers(gameplayMode) {
+            fillInBlankControls.classList.toggle('hidden', gameplayMode !== 'fill-in-blank');
+            moleWhackControls.classList.toggle('hidden', gameplayMode !== 'mole-whack');
+
+            if (gameplayMode === 'fill-in-blank') {
+                fillInBlankControls.querySelectorAll('.target-btn').forEach(btn => {
+                    btn.onclick = () => sendAction('shoot', { target: btn.dataset.target });
+                });
+            } else if (gameplayMode === 'mole-whack') {
+                moleWhackControls.innerHTML = ''; // Clear previous buttons
+                for (let i = 0; i < 9; i++) {
+                    const btn = document.createElement('button');
+                    btn.className = 'mole-btn';
+                    btn.dataset.holeIndex = i;
+                    btn.onclick = () => sendAction('whack', { holeIndex: i });
+                    moleWhackControls.appendChild(btn);
+                }
+            }
+        }
 
         function updateUI() {
             if (playerDataCache) {
@@ -109,22 +139,29 @@
             }
         }
 
-
         onSnapshot(gameRef, (doc) => {
-            gameDataCache = doc.data();
-            
-            if (gameDataCache) {
-                pausedOverlay.classList.toggle('hidden', !gameDataCache.paused);
+            const newGameData = doc.data();
+            if (!newGameData) return;
 
-                if (gameDataCache.state === "playing") {
-                    controllerUI.classList.remove('hidden');
-                    waitingScreen.classList.add('hidden');
-                    roundMessageEl.textContent = `문제 ${gameDataCache.currentRound || 1}`;
-                } else if (gameDataCache.state === "finished") {
-                    controllerUI.classList.add('hidden');
-                    waitingScreen.classList.remove('hidden');
-                    waitingScreen.innerHTML = `<p class="text-2xl text-gray-700">게임 종료! 메인 화면에서 순위를 확인하세요.</p>`
+            // Check if gameplay mode has changed or is set for the first time
+            if (!gameDataCache || gameDataCache.settings?.gameplayMode !== newGameData.settings?.gameplayMode) {
+                if (newGameData.settings?.gameplayMode) {
+                    setupControllers(newGameData.settings.gameplayMode);
                 }
+            }
+            
+            gameDataCache = newGameData;
+            
+            pausedOverlay.classList.toggle('hidden', !gameDataCache.paused);
+
+            if (gameDataCache.state === "playing") {
+                controllerUI.classList.remove('hidden');
+                waitingScreen.classList.add('hidden');
+                roundMessageEl.textContent = `문제 ${gameDataCache.currentRound || 1}`;
+            } else if (gameDataCache.state === "finished") {
+                controllerUI.classList.add('hidden');
+                waitingScreen.classList.remove('hidden');
+                waitingScreen.innerHTML = `<p class="text-2xl text-gray-700">게임 종료! 메인 화면에서 순위를 확인하세요.</p>`
             }
             updateUI();
         });
@@ -149,14 +186,8 @@
 
             setTimeout(() => {
                 actionCooldown = false;
-            }, 1000); // 1초 쿨다운
+            }, 500); // 쿨다운 0.5초로 줄임
         }
-        
-        targetBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                sendAction('shoot', { target: btn.dataset.target });
-            });
-        });
         
     </script>
 </body>
