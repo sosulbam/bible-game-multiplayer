@@ -14,7 +14,7 @@
     <style>
         body { font-family: 'Gowun Dodum', sans-serif; background-color: #f0f9ff; }
         canvas { background: linear-gradient(to bottom, #38bdf8, #e0f2fe); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .category-btn.selected { background-color: #0ea5e9; color: white; }
+        .category-btn.selected, .mode-btn.selected { background-color: #0ea5e9; color: white; }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen">
@@ -25,14 +25,24 @@
             <h1 class="text-4xl font-bold text-sky-700 mb-4">말씀의 빛: 그룹 대전</h1>
             <p class="text-xl text-gray-600 mb-6">스마트폰으로 QR 코드를 스캔하여 게임에 참여하세요!</p>
             
-            <div class="max-w-3xl mx-auto bg-white/70 p-4 rounded-lg shadow-md mb-6">
+            <div class="max-w-4xl mx-auto bg-white/70 p-4 rounded-lg shadow-md mb-6">
                 <h3 class="text-xl font-bold text-gray-700 mb-3">게임 설정</h3>
+                <!-- 게임 모드 선택 -->
+                <div class="mb-4">
+                    <label class="font-bold">게임 모드:</label>
+                    <div id="game-mode-selector" class="inline-flex rounded-md shadow-sm" role="group">
+                      <button type="button" data-mode="personal" class="mode-btn selected py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-200 hover:bg-gray-100">
+                        개인전
+                      </button>
+                      <button type="button" data-mode="team" class="mode-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-r-md border border-gray-200 hover:bg-gray-100">
+                        팀전
+                      </button>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
                     <div>
                         <label class="font-bold">카테고리 선택 (다중 선택 가능):</label>
-                        <div id="category-selector" class="mt-2 flex flex-wrap gap-2 p-2 bg-gray-100 rounded-md max-h-64 overflow-y-auto">
-                            <!-- 카테고리 버튼이 여기에 동적으로 추가됩니다 -->
-                        </div>
+                        <div id="category-selector" class="mt-2 flex flex-wrap gap-2 p-2 bg-gray-100 rounded-md max-h-64 overflow-y-auto"></div>
                     </div>
                     <div class="space-y-3">
                         <div>
@@ -49,11 +59,23 @@
 
             <div class="flex flex-col md:flex-row items-center justify-center gap-8">
                 <div id="qrcode" class="p-4 bg-white rounded-lg shadow-md"></div>
-                <div>
+                <!-- 참가자 목록 -->
+                <div id="player-list-container" class="w-full max-w-md">
                     <h2 class="text-2xl font-bold mb-3">참가자 목록 (<span id="player-count">0</span>명)</h2>
                     <ul id="player-list" class="text-left text-lg space-y-2 h-48 overflow-y-auto p-2 bg-gray-100 rounded-lg">
                         <li class="text-gray-500">아직 참가자가 없습니다...</li>
                     </ul>
+                </div>
+                <!-- 팀 목록 -->
+                <div id="team-display" class="hidden w-full max-w-md grid-cols-2 gap-4">
+                    <div>
+                        <h2 id="team-a-name" class="text-2xl font-bold mb-3 text-blue-600"></h2>
+                        <ul id="team-a-list" class="text-left text-lg space-y-2 h-48 overflow-y-auto p-2 bg-blue-50 rounded-lg"></ul>
+                    </div>
+                    <div>
+                        <h2 id="team-b-name" class="text-2xl font-bold mb-3 text-red-600"></h2>
+                        <ul id="team-b-list" class="text-left text-lg space-y-2 h-48 overflow-y-auto p-2 bg-red-50 rounded-lg"></ul>
+                    </div>
                 </div>
             </div>
             <div class="mt-8">
@@ -90,12 +112,12 @@
                 </div>
             </div>
             <canvas id="gameCanvas"></canvas>
-            <div id="scoreboard" class="mt-2 flex flex-wrap justify-center gap-2"></div>
+            <div id="scoreboard" class="mt-2 flex flex-wrap justify-center gap-4"></div>
         </div>
         
         <!-- 결과 화면 -->
         <div id="result-screen" class="hidden">
-            <h1 class="text-5xl font-bold text-amber-500 mb-8">🎉 최종 결과 🎉</h1>
+            <h1 id="result-title" class="text-5xl font-bold text-amber-500 mb-8">🎉 최종 결과 🎉</h1>
             <div id="final-ranking" class="space-y-4 max-w-md mx-auto">
             </div>
             <button id="restart-button" class="mt-12 bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-full text-2xl transition shadow-lg">새 게임 시작</button>
@@ -105,7 +127,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, collection, onSnapshot, updateDoc, addDoc, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, collection, onSnapshot, updateDoc, addDoc, query, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBCNjgy_28rzMu66Si9W4U6y6sZ6kffIPk",
@@ -138,13 +160,23 @@
         const roundCounterEl = document.getElementById('round-counter');
         const timerEl = document.getElementById('timer');
         const finalRanking = document.getElementById('final-ranking');
+        const resultTitle = document.getElementById('result-title');
         const restartButton = document.getElementById('restart-button');
         const categorySelector = document.getElementById('category-selector');
         const roundsInput = document.getElementById('rounds-input');
         const timeLimitInput = document.getElementById('time-limit-input');
+        const gameModeSelector = document.getElementById('game-mode-selector');
+        const playerListContainer = document.getElementById('player-list-container');
+        const teamDisplay = document.getElementById('team-display');
+        const teamANameEl = document.getElementById('team-a-name');
+        const teamBNameEl = document.getElementById('team-b-name');
+        const teamAListEl = document.getElementById('team-a-list');
+        const teamBListEl = document.getElementById('team-b-list');
 
         let gameId;
         let players = {};
+        let teams = {};
+        let gameMode = 'personal';
         let playersUnsubscribe, actionsUnsubscribe;
         let versesData = [];
         let currentBlankWord;
@@ -162,32 +194,31 @@
         const difficultySettings = {
             speed: 0.5, 
             points: 10,
-            penalty: -10
+            penalty: -5
         };
 
+        const animalNames = ["🦁 사자", "🐯 호랑이", "🐻 곰", "🦊 여우", "🦅 독수리", "🦄 유니콘", "🐉 용", "🐘 코끼리", "🐬 돌고래", "🦈 상어"];
+
         class PlayerCharacter {
-            constructor(id, name) {
+            constructor(id, name, teamId) {
                 this.id = id;
                 this.name = name;
+                this.teamId = teamId;
                 this.width = 50;
                 this.height = 40;
                 this.x = Math.random() * (canvas.width - this.width);
                 this.y = canvas.height - this.height - 10;
-                const r = Math.floor(Math.random() * 155) + 100;
-                const g = Math.floor(Math.random() * 155) + 100;
-                const b = Math.floor(Math.random() * 155) + 100;
-                this.color = `rgb(${r},${g},${b})`;
                 this.flash = 0;
                 
                 const sheepSVG = `
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 45" width="${this.width}" height="${this.height}">
-                      <g fill="${this.color}" stroke="#555" stroke-width="1">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 64 49">
+                      <g fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3">
                         <path d="M20,25 a10,10 0 1,1 20,0 a15,15 0 1,1 -20,0" transform="translate(0, 5)"/>
                         <circle cx="15" cy="20" r="8"/><circle cx="45" cy="20" r="8"/><circle cx="30" cy="12" r="10"/>
-                        <g fill="#000"><circle cx="25" cy="30" r="1.5"/><circle cx="35" cy="30" r="1.5"/></g>
+                        <g fill="#000" stroke="none"><circle cx="25" cy="30" r="1.5"/><circle cx="35" cy="30" r="1.5"/></g>
                         <path d="M 28 35 q 2 -3 4 0" stroke="black" fill="none" stroke-width="1"/>
                       </g>
-                      <rect x="20" y="38" width="5" height="7" rx="2" fill="${this.color}" stroke="#555" /><rect x="35" y="38" width="5" height="7" rx="2" fill="${this.color}" stroke="#555"/>
+                      <rect x="20" y="38" width="5" height="7" rx="2" fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3" /><rect x="35" y="38" width="5" height="7" rx="2" fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3"/>
                     </svg>`;
                 this.image = new Image();
                 this.image.src = `data:image/svg+xml;base64,${btoa(sheepSVG)}`;
@@ -199,14 +230,15 @@
                 }
                 ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
                 ctx.globalAlpha = 1.0;
-                ctx.fillStyle = 'black';
+                ctx.fillStyle = this.teamId === 'teamA' ? '#3b82f6' : '#ef4444';
                 ctx.textAlign = 'center';
-                ctx.font = '14px Gowun Dodum';
+                ctx.font = 'bold 14px Gowun Dodum';
                 ctx.fillText(this.name, this.x + this.width / 2, this.y - 5);
             }
             shoot() {
                 this.flash = 30;
-                beams.push(new Beam(this.x + this.width / 2, this.y, this.color));
+                const beamColor = this.teamId === 'teamA' ? '59, 130, 246' : '239, 68, 68';
+                beams.push(new Beam(this.x + this.width / 2, this.y, beamColor));
             }
         }
         
@@ -287,8 +319,8 @@
             }
             draw() {
                 const alpha = this.life / 15;
-                ctx.fillStyle = `rgba(${this.color.replace('rgb(','').replace(')','')}, ${alpha * 0.8})`;
-                ctx.shadowColor = this.color;
+                ctx.fillStyle = `rgba(${this.color}, ${alpha * 0.8})`;
+                ctx.shadowColor = `rgb(${this.color})`;
                 ctx.shadowBlur = 20;
                 ctx.fillRect(this.x - this.width / 2, 0, this.width, this.y);
                 ctx.shadowBlur = 0;
@@ -311,9 +343,22 @@
 
 
         async function initializeHost() {
+            const teamAIndex = Math.floor(Math.random() * animalNames.length);
+            let teamBIndex;
+            do {
+                teamBIndex = Math.floor(Math.random() * animalNames.length);
+            } while (teamAIndex === teamBIndex);
+            
+            teams = {
+                teamA: { name: animalNames[teamAIndex], score: 0 },
+                teamB: { name: animalNames[teamBIndex], score: 0 }
+            };
+
             const gameRef = await addDoc(collection(db, "games"), {
                 state: "lobby",
-                createdAt: serverTimestamp()
+                createdAt: serverTimestamp(),
+                mode: gameMode,
+                teams: teams
             });
             gameId = gameRef.id;
             gameIdDisplay.textContent = gameId;
@@ -327,30 +372,66 @@
             const playersRef = collection(db, "games", gameId, "players");
             playersUnsubscribe = onSnapshot(playersRef, (snapshot) => {
                 const newPlayersData = {};
-                snapshot.forEach(doc => {
-                    newPlayersData[doc.id] = doc.data();
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === "added") {
+                        const newPlayerId = change.doc.id;
+                        const newPlayerData = change.doc.data();
+                        if (gameMode === 'team' && !newPlayerData.team) {
+                            assignTeam(newPlayerId);
+                        }
+                    }
+                    newPlayersData[change.doc.id] = change.doc.data();
                 });
                 updatePlayerList(newPlayersData);
-                updateScoreboard(newPlayersData);
-                if (Object.keys(newPlayersData).length > 0) {
-                    startGameButton.disabled = false;
+                if (gameMode === 'personal') {
+                    updateScoreboard(newPlayersData);
                 }
+            });
+
+            onSnapshot(doc(db, "games", gameId), (docSnap) => {
+                if (docSnap.exists() && docSnap.data().teams) {
+                    teams = docSnap.data().teams;
+                    if (gameMode === 'team') {
+                        updateTeamScoreboard();
+                    }
+                }
+            });
+        }
+
+        async function assignTeam(playerId) {
+            const teamAPlayers = Object.values(players).filter(p => p.team === 'teamA').length;
+            const teamBPlayers = Object.values(players).filter(p => p.team === 'teamB').length;
+            const teamToAssign = teamAPlayers <= teamBPlayers ? 'teamA' : 'teamB';
+            await updateDoc(doc(db, "games", gameId, "players", playerId), {
+                team: teamToAssign
             });
         }
 
         function updatePlayerList(newPlayerData) {
             playerList.innerHTML = '';
+            teamAListEl.innerHTML = '';
+            teamBListEl.innerHTML = '';
             const playerIds = Object.keys(newPlayerData);
             playerCountEl.textContent = playerIds.length;
+            
             if (playerIds.length === 0) {
                 playerList.innerHTML = '<li class="text-gray-500">아직 참가자가 없습니다...</li>';
                 return;
             }
+
             playerIds.forEach(id => {
                 const playerData = newPlayerData[id];
                 const li = document.createElement('li');
                 li.textContent = `🐑 ${playerData.name}`;
-                playerList.appendChild(li);
+
+                if (gameMode === 'team') {
+                    if (playerData.team === 'teamA') teamAListEl.appendChild(li);
+                    else if (playerData.team === 'teamB') teamBListEl.appendChild(li);
+                    else playerList.appendChild(li); // 팀 배정 전
+                } else {
+                    playerList.appendChild(li);
+                }
+                
                 if (!players[id]) {
                     players[id] = { ...playerData, character: null };
                 } else {
@@ -373,6 +454,17 @@
                 div.innerHTML = `<div class="font-bold text-lg">${data.name}</div><div class="text-xl">${data.score}점</div>`;
                 scoreboard.appendChild(div);
             }
+        }
+
+        function updateTeamScoreboard() {
+            scoreboard.innerHTML = '';
+            Object.entries(teams).forEach(([teamId, teamData]) => {
+                const color = teamId === 'teamA' ? 'blue' : 'red';
+                const div = document.createElement('div');
+                div.className = `p-4 bg-${color}-100 border-2 border-${color}-500 rounded-lg shadow-lg text-center`;
+                div.innerHTML = `<div class="font-bold text-2xl text-${color}-700">${teamData.name}</div><div class="text-3xl">${teamData.score}점</div>`;
+                scoreboard.appendChild(div);
+            });
         }
         
         function listenForActions() {
@@ -397,20 +489,46 @@
                     player.character.x = targetEnemy.x + (targetEnemy.width / 2) - (player.character.width / 2);
                     player.character.shoot();
                 }
-                if (targetEnemy.isCorrect) {
-                    roundActive = false;
-                    playCorrectSound();
-                    const newScore = (player.score || 0) + difficultySettings.points;
-                    await updateDoc(doc(db, "games", gameId, "players", playerId), { score: newScore });
-                    for(let i = 0; i < 30; i++) {
-                        particles.push(new Particle(targetEnemy.x + targetEnemy.width/2, targetEnemy.y + targetEnemy.height/2, '255, 215, 0'));
-                    }
-                    setTimeout(() => { nextRound(); }, 2000);
-                } else {
-                    playIncorrectSound();
-                    const playerDocRef = doc(db, "games", gameId, "players", playerId);
-                    const currentScore = player.score || 0;
-                    await updateDoc(playerDocRef, { score: Math.max(0, currentScore + difficultySettings.penalty) });
+
+                try {
+                    await runTransaction(db, async (transaction) => {
+                        const playerDocRef = doc(db, "games", gameId, "players", playerId);
+                        const gameDocRef = doc(db, "games", gameId);
+                        const playerDoc = await transaction.get(playerDocRef);
+                        const gameDoc = await transaction.get(gameDocRef);
+
+                        if (!playerDoc.exists() || !gameDoc.exists()) {
+                            throw "Document does not exist!";
+                        }
+
+                        const currentScore = playerDoc.data().score || 0;
+                        const currentTeam = playerDoc.data().team;
+                        const currentTeams = gameDoc.data().teams;
+
+                        if (targetEnemy.isCorrect) {
+                            roundActive = false;
+                            playCorrectSound();
+                            
+                            transaction.update(playerDocRef, { score: currentScore + difficultySettings.points });
+                            if (gameMode === 'team' && currentTeam) {
+                                const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.points;
+                                transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
+                            }
+
+                            for(let i = 0; i < 30; i++) {
+                                particles.push(new Particle(targetEnemy.x + targetEnemy.width/2, targetEnemy.y + targetEnemy.height/2, '255, 215, 0'));
+                            }
+                            setTimeout(() => { nextRound(); }, 2000);
+                        } else {
+                            playIncorrectSound();
+                            if (gameMode === 'team' && currentTeam) {
+                                const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.penalty;
+                                transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error("Transaction failed: ", e);
                 }
             }
         }
@@ -430,7 +548,7 @@
             canvas.width = document.getElementById('game-container').clientWidth;
             canvas.height = Math.min(window.innerHeight * 0.6, 600);
             Object.keys(players).forEach(id => {
-                players[id].character = new PlayerCharacter(id, players[id].name);
+                players[id].character = new PlayerCharacter(id, players[id].name, players[id].team);
             });
             await updateDoc(doc(db, "games", gameId), { 
                 state: "playing",
@@ -474,9 +592,9 @@
                 attempts++;
             } while (candidateWords.length === 0 && attempts < 50);
 
-            if (candidateWords.length === 0) { // 적절한 단어를 못 찾으면 그냥 랜덤 단어 사용
+            if (candidateWords.length === 0) {
                 candidateWords = words.filter(w => w.length > 1);
-                if(candidateWords.length === 0) { // 그래도 없으면 다음 라운드로
+                if(candidateWords.length === 0) {
                     nextRound();
                     return;
                 }
@@ -557,15 +675,32 @@
             gameScreen.classList.add('hidden');
             resultScreen.classList.remove('hidden');
             await updateDoc(doc(db, "games", gameId), { state: "finished" });
-            const sortedPlayers = Object.values(players).sort((a,b) => b.score - a.score);
-            finalRanking.innerHTML = '';
-            sortedPlayers.forEach((p, index) => {
-                const div = document.createElement('div');
-                const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
-                div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
-                div.innerHTML = `<span class="font-bold">${rankEmoji} ${p.name}</span><span>${p.score}점</span>`;
-                finalRanking.appendChild(div);
-            });
+
+            if (gameMode === 'team') {
+                const winnerTeam = teams.teamA.score > teams.teamB.score ? teams.teamA : teams.teamB;
+                const loserTeam = teams.teamA.score <= teams.teamB.score ? teams.teamA : teams.teamB;
+                resultTitle.textContent = `🎉 ${winnerTeam.name} 승리! 🎉`;
+                finalRanking.innerHTML = `
+                    <div class="p-6 bg-green-100 border-2 border-green-500 rounded-lg shadow-lg">
+                        <h3 class="text-3xl font-bold text-green-700">${winnerTeam.name}</h3>
+                        <p class="text-4xl">${winnerTeam.score}점</p>
+                    </div>
+                    <div class="p-4 bg-red-100 rounded-lg">
+                        <h3 class="text-2xl font-bold text-red-700">${loserTeam.name}</h3>
+                        <p class="text-3xl">${loserTeam.score}점</p>
+                    </div>
+                `;
+            } else {
+                const sortedPlayers = Object.values(players).sort((a,b) => b.score - a.score);
+                finalRanking.innerHTML = '';
+                sortedPlayers.forEach((p, index) => {
+                    const div = document.createElement('div');
+                    const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
+                    div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
+                    div.innerHTML = `<span class="font-bold">${rankEmoji} ${p.name}</span><span>${p.score}점</span>`;
+                    finalRanking.appendChild(div);
+                });
+            }
         }
 
         function isValidBlankWord(word) {
@@ -588,6 +723,27 @@
             }
             return Array.from(distractors);
         }
+
+        gameModeSelector.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                gameMode = e.target.dataset.mode;
+                gameModeSelector.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('selected'));
+                e.target.classList.add('selected');
+
+                if (gameMode === 'team') {
+                    playerListContainer.classList.add('hidden');
+                    teamDisplay.classList.add('grid');
+                    teamDisplay.classList.remove('hidden');
+                    teamANameEl.textContent = teams.teamA.name;
+                    teamBNameEl.textContent = teams.teamB.name;
+                } else {
+                    playerListContainer.classList.remove('hidden');
+                    teamDisplay.classList.add('hidden');
+                    teamDisplay.classList.remove('grid');
+                }
+                updatePlayerList(players);
+            }
+        });
 
         startGameButton.addEventListener('click', startGame);
         restartButton.addEventListener('click', () => window.location.reload());
