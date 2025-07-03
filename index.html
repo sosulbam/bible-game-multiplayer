@@ -464,15 +464,28 @@
                 endGame();
                 return;
             }
-            let verse, words, blankIndex;
+            
+            let verse, words, blankIndex, candidateWords;
+            let attempts = 0;
             do {
                 verse = filteredVerses[Math.floor(Math.random() * filteredVerses.length)];
                 words = verse.본문.split(' ').filter(w => w.trim().length > 0);
-            } while (words.length < 3);
-            blankIndex = Math.floor(Math.random() * words.length);
-            currentBlankWord = words[blankIndex];
+                candidateWords = words.filter(isValidBlankWord);
+                attempts++;
+            } while (candidateWords.length === 0 && attempts < 50);
+
+            if (candidateWords.length === 0) { // 적절한 단어를 못 찾으면 그냥 랜덤 단어 사용
+                candidateWords = words.filter(w => w.length > 1);
+                if(candidateWords.length === 0) { // 그래도 없으면 다음 라운드로
+                    nextRound();
+                    return;
+                }
+            }
+
+            currentBlankWord = candidateWords[Math.floor(Math.random() * candidateWords.length)];
+            blankIndex = words.indexOf(currentBlankWord);
             
-            const distractors = await generateSmartDistractors(currentBlankWord, versesData);
+            const distractors = generateDistractors(currentBlankWord, versesData);
 
             const options = [currentBlankWord, ...distractors];
             options.sort(() => Math.random() - 0.5);
@@ -555,49 +568,23 @@
             });
         }
 
-        function hasBatchim(char) {
-            if (typeof char !== 'string' || char.length === 0) return false;
-            const code = char.charCodeAt(char.length - 1);
-            if (code < 0xAC00 || code > 0xD7A3) return false;
-            return (code - 0xAC00) % 28 !== 0;
+        function isValidBlankWord(word) {
+            const particlesAndEndings = ['은', '는', '이', '가', '을', '를', '의', '에', '에게', '께', '에서', '으로', '로', '와', '과', '도', '만', '뿐', '까지', '마저', '조차', '부터', '하고', '이며', '이라', '다', '요', '죠', '고', '며', '니', '네', '라', '나', '까', '습니다', 'ㅂ니다', '어요', '아요'];
+            if (word.length <= 1) return false;
+            for (const p of particlesAndEndings) {
+                if (word.endsWith(p)) return false;
+            }
+            return true;
         }
 
-        async function generateSmartDistractors(correctWord, allVerses) {
-            const allNouns = allVerses.flatMap(v => v.본문.split(' ')).filter(w => w.length > 1 && w !== correctWord);
-            const distractors = new Set();
+        function generateDistractors(correctWord, allVerses) {
+            const candidatePool = allVerses.flatMap(v => v.본문.split(' '))
+                                         .filter(w => isValidBlankWord(w) && w !== correctWord);
             
-            // 간단한 조사 분리 (더 정교한 로직도 가능)
-            const particles = ['은', '는', '이', '가', '을', '를', '의', '과', '와', '으로', '로'];
-            let correctBase = correctWord;
-            let correctParticle = '';
-            for (const p of particles) {
-                if (correctWord.endsWith(p)) {
-                    correctBase = correctWord.slice(0, -p.length);
-                    correctParticle = p;
-                    break;
-                }
-            }
-
-            while (distractors.size < 2 && allNouns.length > 0) {
-                const randomNoun = allNouns[Math.floor(Math.random() * allNouns.length)];
-                if (randomNoun === correctBase) continue;
-
-                let distractor = randomNoun;
-                if (correctParticle) {
-                    let particleToAttach = correctParticle;
-                    if (['은', '는'].includes(correctParticle)) particleToAttach = hasBatchim(randomNoun) ? '은' : '는';
-                    else if (['이', '가'].includes(correctParticle)) particleToAttach = hasBatchim(randomNoun) ? '이' : '가';
-                    else if (['을', '를'].includes(correctParticle)) particleToAttach = hasBatchim(randomNoun) ? '을' : '를';
-                    else if (['으로', '로'].includes(correctParticle)) particleToAttach = hasBatchim(randomNoun) ? '으로' : '로';
-                    distractor = randomNoun + particleToAttach;
-                }
-                if (distractor !== correctWord) {
-                    distractors.add(distractor);
-                }
-            }
-            // 만약 스마트 생성에 실패하면 간단한 랜덤 단어로 대체
-            while (distractors.size < 2) {
-                distractors.add(allNouns[Math.floor(Math.random() * allNouns.length)]);
+            const distractors = new Set();
+            while (distractors.size < 2 && candidatePool.length > 0) {
+                const randomIndex = Math.floor(Math.random() * candidatePool.length);
+                distractors.add(candidatePool[randomIndex]);
             }
             return Array.from(distractors);
         }
