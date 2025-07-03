@@ -30,7 +30,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
                     <div>
                         <label class="font-bold">카테고리 선택 (다중 선택 가능):</label>
-                        <div id="category-selector" class="mt-2 flex flex-wrap gap-2 p-2 bg-gray-100 rounded-md max-h-48 overflow-y-auto">
+                        <div id="category-selector" class="mt-2 flex flex-wrap gap-2 p-2 bg-gray-100 rounded-md max-h-64 overflow-y-auto">
                             <!-- 카테고리 버튼이 여기에 동적으로 추가됩니다 -->
                         </div>
                     </div>
@@ -80,7 +80,7 @@
                         <span id="round-counter" class="font-bold text-xl">0 / 10</span>
                     </div>
                     <div id="question-box" class="text-center">
-                        <p id="question-verse" class="text-lg font-bold text-sky-800"></p>
+                        <p id="question-verse" class="text-2xl font-bold text-sky-800"></p>
                         <p id="question-text" class="text-xl text-gray-800 mt-1"></p>
                     </div>
                     <div>
@@ -216,7 +216,7 @@
                 this.speed = (Math.random() * 0.5 + 0.8) * difficultySettings.speed;
                 this.word = word; this.isCorrect = isCorrect;
                 this.number = number;
-                ctx.font = 'bold 24px Gowun Dodum';
+                ctx.font = 'bold 30px Gowun Dodum';
                 this.width = ctx.measureText(this.word).width + 40;
                 this.height = 50;
 
@@ -235,12 +235,12 @@
             }
             draw() {
                 ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
-                ctx.font = 'bold 24px Gowun Dodum';
+                ctx.font = 'bold 30px Gowun Dodum';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 
                 ctx.strokeStyle = 'black';
-                ctx.lineWidth = 5;
+                ctx.lineWidth = 6;
                 ctx.strokeText(this.word, this.x + this.width / 2, this.y + this.height / 2 + 2);
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillText(this.word, this.x + this.width / 2, this.y + this.height / 2 + 2);
@@ -283,7 +283,7 @@
                 this.y = y;
                 this.color = color;
                 this.width = 15;
-                this.life = 15; // 15 프레임(약 0.25초) 동안 지속
+                this.life = 15; 
             }
             draw() {
                 const alpha = this.life / 15;
@@ -295,7 +295,6 @@
             }
             update() {
                 this.life--;
-                this.draw();
             }
         }
         
@@ -318,17 +317,13 @@
             });
             gameId = gameRef.id;
             gameIdDisplay.textContent = gameId;
-
             const joinUrl = `${window.location.origin}/join.html?gameId=${gameId}`;
-            
             pcJoinUrlInput.value = joinUrl;
             pcJoinUrlContainer.classList.remove('hidden');
-
             const qr = qrcode(0, 'L');
             qr.addData(joinUrl);
             qr.make();
             qrcodeContainer.innerHTML = qr.createImgTag(6);
-
             const playersRef = collection(db, "games", gameId, "players");
             playersUnsubscribe = onSnapshot(playersRef, (snapshot) => {
                 const newPlayersData = {};
@@ -347,18 +342,15 @@
             playerList.innerHTML = '';
             const playerIds = Object.keys(newPlayerData);
             playerCountEl.textContent = playerIds.length;
-
             if (playerIds.length === 0) {
                 playerList.innerHTML = '<li class="text-gray-500">아직 참가자가 없습니다...</li>';
                 return;
             }
-
             playerIds.forEach(id => {
                 const playerData = newPlayerData[id];
                 const li = document.createElement('li');
                 li.textContent = `🐑 ${playerData.name}`;
                 playerList.appendChild(li);
-
                 if (!players[id]) {
                     players[id] = { ...playerData, character: null };
                 } else {
@@ -375,10 +367,9 @@
         function updateScoreboard(playerData) {
             scoreboard.innerHTML = '';
             const sortedPlayers = Object.entries(playerData).sort((a, b) => b[1].score - a[1].score);
-            
             for (const [id, data] of sortedPlayers) {
                 const div = document.createElement('div');
-                div.className = 'p-2 bg-white/80 rounded-md shadow';
+                div.className = 'p-2 bg-white/80 rounded-md shadow text-center';
                 div.innerHTML = `<div class="font-bold text-lg">${data.name}</div><div class="text-xl">${data.score}점</div>`;
                 scoreboard.appendChild(div);
             }
@@ -398,30 +389,23 @@
 
         async function handlePlayerAction(playerId, payload) {
             if (!roundActive) return;
-
             const targetNumber = parseInt(payload.target, 10);
             const targetEnemy = enemies.find(e => e.number === targetNumber);
-
             if (targetEnemy) {
                 const player = players[playerId];
                 if (player && player.character) {
                     player.character.x = targetEnemy.x + (targetEnemy.width / 2) - (player.character.width / 2);
                     player.character.shoot();
                 }
-
                 if (targetEnemy.isCorrect) {
                     roundActive = false;
                     playCorrectSound();
-                    
                     const newScore = (player.score || 0) + difficultySettings.points;
                     await updateDoc(doc(db, "games", gameId, "players", playerId), { score: newScore });
-
                     for(let i = 0; i < 30; i++) {
                         particles.push(new Particle(targetEnemy.x + targetEnemy.width/2, targetEnemy.y + targetEnemy.height/2, '255, 215, 0'));
                     }
-                    
                     setTimeout(() => { nextRound(); }, 2000);
-
                 } else {
                     playIncorrectSound();
                     const playerDocRef = doc(db, "games", gameId, "players", playerId);
@@ -435,34 +419,23 @@
             selectedCategories = [...categorySelector.querySelectorAll('.selected')].map(btn => btn.dataset.category);
             totalRounds = parseInt(roundsInput.value) || 10;
             totalGameTime = (parseInt(timeLimitInput.value) || 3) * 60;
-
             if (selectedCategories.length === 0) {
                 alert('하나 이상의 카테고리를 선택해주세요.');
                 return;
             }
-
             setupAudio();
             listenForActions();
-            
             lobbyScreen.classList.add('hidden');
             gameScreen.classList.remove('hidden');
-
             canvas.width = document.getElementById('game-container').clientWidth;
             canvas.height = Math.min(window.innerHeight * 0.6, 600);
-            
             Object.keys(players).forEach(id => {
                 players[id].character = new PlayerCharacter(id, players[id].name);
             });
-
             await updateDoc(doc(db, "games", gameId), { 
                 state: "playing",
-                settings: {
-                    categories: selectedCategories,
-                    rounds: totalRounds,
-                    time: totalGameTime
-                }
+                settings: { categories: selectedCategories, rounds: totalRounds, time: totalGameTime }
             });
-            
             let currentRound = 0;
             nextRound(currentRound);
             startTotalGameTimer();
@@ -478,12 +451,10 @@
             currentRound++;
             roundActive = true;
             playRoundStartSound();
-
             enemies = [];
             particles = [];
             beams = [];
             roundCounterEl.textContent = `${currentRound} / ${totalRounds}`;
-            
             let filteredVerses = versesData;
             if (!selectedCategories.includes('전체')) {
                 filteredVerses = versesData.filter(v => v.카테고리 && selectedCategories.includes(v.카테고리));
@@ -493,39 +464,28 @@
                 endGame();
                 return;
             }
-
             let verse, words, blankIndex;
             do {
                 verse = filteredVerses[Math.floor(Math.random() * filteredVerses.length)];
                 words = verse.본문.split(' ').filter(w => w.trim().length > 0);
             } while (words.length < 3);
-
             blankIndex = Math.floor(Math.random() * words.length);
             currentBlankWord = words[blankIndex];
             
-            const distractors = [];
-            const allWords = versesData.flatMap(v => v.본문.split(' ')).filter(w => w.trim().length > 1 && w !== currentBlankWord);
-            while (distractors.length < 2) {
-                const randomWord = allWords[Math.floor(Math.random() * allWords.length)];
-                if (randomWord && !distractors.includes(randomWord)) distractors.push(randomWord);
-            }
+            const distractors = await generateSmartDistractors(currentBlankWord, versesData);
 
             const options = [currentBlankWord, ...distractors];
             options.sort(() => Math.random() - 0.5);
-
             options.forEach((word, i) => {
                 const x = (canvas.width / (options.length + 1)) * (i + 1) - 50;
                 enemies.push(new Enemy(x, -60, word, word === currentBlankWord, i + 1));
             });
-
             const questionPayload = {
                 verse: `[${verse.장절}]`,
                 text: words.map((w, i) => (i === blankIndex ? '_______' : w)).join(' '),
             };
-
             questionVerseEl.textContent = questionPayload.verse;
             questionTextEl.textContent = questionPayload.text;
-
             await updateDoc(doc(db, "games", gameId), {
                 currentRound,
                 question: questionPayload,
@@ -539,7 +499,6 @@
                 const minutes = Math.floor(timeLeft / 60);
                 const seconds = timeLeft % 60;
                 timerEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-                
                 if (timeLeft <= 0) {
                     endGame();
                 }
@@ -550,11 +509,9 @@
             if (gameScreen.classList.contains('hidden')) return;
             requestAnimationFrame(animate);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
             for (const id in players) {
                 if(players[id].character) players[id].character.draw();
             }
-            
             enemies.forEach((e, i) => {
                 if (e.y > canvas.height) {
                     enemies.splice(i, 1);
@@ -562,12 +519,10 @@
                     e.update();
                 }
             });
-
             if (roundActive && enemies.length === 0) {
                 roundActive = false;
                 setTimeout(() => nextRound(), 1500);
             }
-
             beams.forEach((b, i) => {
                 if (b.life <= 0) {
                     beams.splice(i, 1);
@@ -582,40 +537,78 @@
         }
 
         async function endGame() {
-            if (gameScreen.classList.contains('hidden')) return; // 이미 종료된 경우 중복 실행 방지
-            
+            if (gameScreen.classList.contains('hidden')) return;
             clearInterval(gameTimerId);
             playFinishSound();
             if (actionsUnsubscribe) actionsUnsubscribe();
-            
             gameScreen.classList.add('hidden');
             resultScreen.classList.remove('hidden');
             await updateDoc(doc(db, "games", gameId), { state: "finished" });
-
             const sortedPlayers = Object.values(players).sort((a,b) => b.score - a.score);
             finalRanking.innerHTML = '';
             sortedPlayers.forEach((p, index) => {
                 const div = document.createElement('div');
                 const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
                 div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
-                div.innerHTML = `
-                    <span class="font-bold">${rankEmoji} ${p.name}</span>
-                    <span>${p.score}점</span>
-                `;
+                div.innerHTML = `<span class="font-bold">${rankEmoji} ${p.name}</span><span>${p.score}점</span>`;
                 finalRanking.appendChild(div);
             });
         }
 
+        function hasBatchim(char) {
+            if (typeof char !== 'string' || char.length === 0) return false;
+            const code = char.charCodeAt(char.length - 1);
+            if (code < 0xAC00 || code > 0xD7A3) return false;
+            return (code - 0xAC00) % 28 !== 0;
+        }
+
+        async function generateSmartDistractors(correctWord, allVerses) {
+            const allNouns = allVerses.flatMap(v => v.본문.split(' ')).filter(w => w.length > 1 && w !== correctWord);
+            const distractors = new Set();
+            
+            // 간단한 조사 분리 (더 정교한 로직도 가능)
+            const particles = ['은', '는', '이', '가', '을', '를', '의', '과', '와', '으로', '로'];
+            let correctBase = correctWord;
+            let correctParticle = '';
+            for (const p of particles) {
+                if (correctWord.endsWith(p)) {
+                    correctBase = correctWord.slice(0, -p.length);
+                    correctParticle = p;
+                    break;
+                }
+            }
+
+            while (distractors.size < 2 && allNouns.length > 0) {
+                const randomNoun = allNouns[Math.floor(Math.random() * allNouns.length)];
+                if (randomNoun === correctBase) continue;
+
+                let distractor = randomNoun;
+                if (correctParticle) {
+                    let particleToAttach = correctParticle;
+                    if (['은', '는'].includes(correctParticle)) particleToAttach = hasBatchim(randomNoun) ? '은' : '는';
+                    else if (['이', '가'].includes(correctParticle)) particleToAttach = hasBatchim(randomNoun) ? '이' : '가';
+                    else if (['을', '를'].includes(correctParticle)) particleToAttach = hasBatchim(randomNoun) ? '을' : '를';
+                    else if (['으로', '로'].includes(correctParticle)) particleToAttach = hasBatchim(randomNoun) ? '으로' : '로';
+                    distractor = randomNoun + particleToAttach;
+                }
+                if (distractor !== correctWord) {
+                    distractors.add(distractor);
+                }
+            }
+            // 만약 스마트 생성에 실패하면 간단한 랜덤 단어로 대체
+            while (distractors.size < 2) {
+                distractors.add(allNouns[Math.floor(Math.random() * allNouns.length)]);
+            }
+            return Array.from(distractors);
+        }
+
         startGameButton.addEventListener('click', startGame);
         restartButton.addEventListener('click', () => window.location.reload());
-        
         copyUrlButton.addEventListener('click', () => {
             pcJoinUrlInput.select();
             document.execCommand('copy');
             copyUrlButton.textContent = '복사됨!';
-            setTimeout(() => {
-                copyUrlButton.textContent = '복사';
-            }, 1500);
+            setTimeout(() => { copyUrlButton.textContent = '복사'; }, 1500);
         });
 
         async function loadDataAndInit() {
@@ -623,7 +616,6 @@
                 const response = await fetch('verses.json');
                 if (!response.ok) throw new Error('verses.json을 불러올 수 없습니다.');
                 versesData = await response.json();
-                
                 const categories = ['전체', ...new Set(versesData.map(v => v.카테고리).filter(Boolean))];
                 categorySelector.innerHTML = '';
                 categories.forEach(cat => {
@@ -631,9 +623,7 @@
                     btn.textContent = cat;
                     btn.dataset.category = cat;
                     btn.className = 'category-btn p-2 border rounded-md bg-white hover:bg-sky-200 transition';
-                    if (cat === '전체') {
-                        btn.classList.add('selected');
-                    }
+                    if (cat === '전체') btn.classList.add('selected');
                     btn.addEventListener('click', () => {
                         btn.classList.toggle('selected');
                         if (btn.dataset.category === '전체' && btn.classList.contains('selected')) {
@@ -646,7 +636,6 @@
                     });
                     categorySelector.appendChild(btn);
                 });
-
                 await initializeHost();
             } catch (error) {
                 console.error("초기화 오류:", error);
