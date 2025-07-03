@@ -15,6 +15,8 @@
         body { font-family: 'Gowun Dodum', sans-serif; background-color: #f0f9ff; }
         canvas { background: linear-gradient(to bottom, #38bdf8, #e0f2fe); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
         .category-btn.selected, .mode-btn.selected { background-color: #0ea5e9; color: white; }
+        .player-item { cursor: pointer; transition: background-color 0.2s; }
+        .player-item:hover { background-color: #dbeafe; }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen">
@@ -27,16 +29,20 @@
             
             <div class="max-w-4xl mx-auto bg-white/70 p-4 rounded-lg shadow-md mb-6">
                 <h3 class="text-xl font-bold text-gray-700 mb-3">게임 설정</h3>
-                <!-- 게임 모드 선택 -->
-                <div class="mb-4">
-                    <label class="font-bold">게임 모드:</label>
-                    <div id="game-mode-selector" class="inline-flex rounded-md shadow-sm" role="group">
-                      <button type="button" data-mode="personal" class="mode-btn selected py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-200 hover:bg-gray-100">
-                        개인전
-                      </button>
-                      <button type="button" data-mode="team" class="mode-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-r-md border border-gray-200 hover:bg-gray-100">
-                        팀전
-                      </button>
+                <div class="mb-4 flex justify-center items-center gap-4">
+                    <div>
+                        <label class="font-bold">게임 모드:</label>
+                        <div id="game-mode-selector" class="inline-flex rounded-md shadow-sm" role="group">
+                          <button type="button" data-mode="personal" class="mode-btn selected py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-200 hover:bg-gray-100">
+                            개인전
+                          </button>
+                          <button type="button" data-mode="team" class="mode-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-r-md border border-gray-200 hover:bg-gray-100">
+                            팀전
+                          </button>
+                        </div>
+                    </div>
+                    <div id="team-assign-controls" class="hidden">
+                        <button id="auto-assign-btn" class="py-2 px-4 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600">팀 균등 분배</button>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
@@ -51,7 +57,7 @@
                         </div>
                         <div>
                             <label for="time-limit-input" class="font-bold">총 게임 시간 (분):</label>
-                            <input type="number" id="time-limit-input" value="3" min="1" max="10" step="1" class="w-full p-2 border rounded-md">
+                            <input type="number" id="time-limit-input" value="1" min="1" max="10" step="1" class="w-full p-2 border rounded-md">
                         </div>
                     </div>
                 </div>
@@ -62,19 +68,19 @@
                 <!-- 참가자 목록 -->
                 <div id="player-list-container" class="w-full max-w-md">
                     <h2 class="text-2xl font-bold mb-3">참가자 목록 (<span id="player-count">0</span>명)</h2>
-                    <ul id="player-list" class="text-left text-lg space-y-2 h-48 overflow-y-auto p-2 bg-gray-100 rounded-lg">
-                        <li class="text-gray-500">아직 참가자가 없습니다...</li>
+                    <ul id="player-list" class="text-left text-lg space-y-1 h-48 overflow-y-auto p-2 bg-gray-100 rounded-lg">
+                        <li class="text-gray-500 p-2">아직 참가자가 없습니다...</li>
                     </ul>
                 </div>
                 <!-- 팀 목록 -->
                 <div id="team-display" class="hidden w-full max-w-md grid-cols-2 gap-4">
                     <div>
                         <h2 id="team-a-name" class="text-2xl font-bold mb-3 text-blue-600"></h2>
-                        <ul id="team-a-list" class="text-left text-lg space-y-2 h-48 overflow-y-auto p-2 bg-blue-50 rounded-lg"></ul>
+                        <ul id="team-a-list" class="text-left text-lg space-y-1 h-48 overflow-y-auto p-2 bg-blue-50 rounded-lg"></ul>
                     </div>
                     <div>
                         <h2 id="team-b-name" class="text-2xl font-bold mb-3 text-red-600"></h2>
-                        <ul id="team-b-list" class="text-left text-lg space-y-2 h-48 overflow-y-auto p-2 bg-red-50 rounded-lg"></ul>
+                        <ul id="team-b-list" class="text-left text-lg space-y-1 h-48 overflow-y-auto p-2 bg-red-50 rounded-lg"></ul>
                     </div>
                 </div>
             </div>
@@ -97,7 +103,7 @@
         <div id="game-screen" class="hidden">
             <div id="game-ui" class="mb-2 p-3 bg-white/60 backdrop-blur-sm rounded-lg shadow-md">
                 <div class="flex justify-between items-center text-gray-700">
-                    <div>
+                    <div class="flex items-center gap-4">
                         <span class="font-bold text-xl">문제:</span>
                         <span id="round-counter" class="font-bold text-xl">0 / 10</span>
                     </div>
@@ -105,9 +111,13 @@
                         <p id="question-verse" class="text-2xl font-bold text-sky-800"></p>
                         <p id="question-text" class="text-xl text-gray-800 mt-1"></p>
                     </div>
-                    <div>
-                        <span class="font-bold text-xl">남은 시간:</span>
-                        <span id="timer" class="font-bold text-xl">03:00</span>
+                    <div class="flex items-center gap-4">
+                        <div>
+                            <span class="font-bold text-xl">남은 시간:</span>
+                            <span id="timer" class="font-bold text-xl">01:00</span>
+                        </div>
+                        <button id="pause-game-btn" class="py-2 px-4 text-sm font-medium text-white bg-yellow-500 rounded-lg hover:bg-yellow-600">일시정지</button>
+                        <button id="force-end-game-btn" class="py-2 px-4 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600">즉시 종료</button>
                     </div>
                 </div>
             </div>
@@ -127,7 +137,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, collection, onSnapshot, updateDoc, addDoc, query, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, collection, onSnapshot, updateDoc, addDoc, query, serverTimestamp, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBCNjgy_28rzMu66Si9W4U6y6sZ6kffIPk",
@@ -172,6 +182,10 @@
         const teamBNameEl = document.getElementById('team-b-name');
         const teamAListEl = document.getElementById('team-a-list');
         const teamBListEl = document.getElementById('team-b-list');
+        const autoAssignBtn = document.getElementById('auto-assign-btn');
+        const teamAssignControls = document.getElementById('team-assign-controls');
+        const pauseGameBtn = document.getElementById('pause-game-btn');
+        const forceEndGameBtn = document.getElementById('force-end-game-btn');
 
         let gameId;
         let players = {};
@@ -185,11 +199,12 @@
         let beams = [];
         let gameTimerId = null;
         let roundActive = false;
+        let isGamePaused = false;
         let synth;
 
         let selectedCategories = [];
         let totalRounds = 10;
-        let totalGameTime = 180;
+        let totalGameTime = 60;
 
         const difficultySettings = {
             speed: 0.5, 
@@ -284,7 +299,10 @@
                 ctx.strokeText(this.number, this.x + this.width / 2, this.y - 10);
                 ctx.fillText(this.number, this.x + this.width / 2, this.y - 10);
             }
-            update() { this.y += this.speed; this.draw(); }
+            update() { 
+                if (!isGamePaused) this.y += this.speed;
+                this.draw();
+            }
         }
 
         class Particle {
@@ -303,6 +321,7 @@
                 ctx.fill();
             }
             update() {
+                if (isGamePaused) return;
                 this.x += this.speedX; this.y += this.speedY;
                 this.life -= 3;
                 this.draw();
@@ -326,7 +345,7 @@
                 ctx.shadowBlur = 0;
             }
             update() {
-                this.life--;
+                if (!isGamePaused) this.life--;
             }
         }
         
@@ -376,33 +395,14 @@
                 snapshot.forEach(doc => {
                     currentPlayersInDB[doc.id] = doc.data();
                 });
-
-                // 새로 추가된 플레이어에게 팀 배정
-                snapshot.docChanges().forEach(change => {
-                    if (change.type === "added") {
-                        const newPlayerId = change.doc.id;
-                        const newPlayerData = change.doc.data();
-                        if (gameMode === 'team' && !newPlayerData.team) {
-                            const teamAPlayers = Object.values(players).filter(p => p.team === 'teamA').length;
-                            const teamBPlayers = Object.values(players).filter(p => p.team === 'teamB').length;
-                            const teamToAssign = teamAPlayers <= teamBPlayers ? 'teamA' : 'teamB';
-                            updateDoc(doc(db, "games", gameId, "players", newPlayerId), { team: teamToAssign });
-                        }
-                    }
-                });
-
-                // 로컬 `players` 객체를 DB와 동기화
                 players = {};
                 for (const id in currentPlayersInDB) {
                     players[id] = { ...currentPlayersInDB[id], character: null };
                 }
-                
                 updatePlayerListUI();
-
                 if (gameMode === 'personal') {
                     updateScoreboard(players);
                 }
-                
                 if (Object.keys(players).length > 0) {
                     startGameButton.disabled = false;
                 } else {
@@ -428,20 +428,21 @@
             playerCountEl.textContent = playerIds.length;
             
             if (playerIds.length === 0) {
-                playerList.innerHTML = '<li class="text-gray-500">아직 참가자가 없습니다...</li>';
-                teamAListEl.innerHTML = '';
-                teamBListEl.innerHTML = '';
+                playerList.innerHTML = '<li class="text-gray-500 p-2">아직 참가자가 없습니다...</li>';
                 return;
             }
 
             playerIds.forEach(id => {
                 const playerData = players[id];
                 const li = document.createElement('li');
+                li.className = 'player-item p-2 rounded-md';
                 li.textContent = `🐑 ${playerData.name}`;
+                li.dataset.playerId = id;
 
                 if (gameMode === 'team') {
                     if (playerData.team === 'teamA') teamAListEl.appendChild(li);
                     else if (playerData.team === 'teamB') teamBListEl.appendChild(li);
+                    else playerList.appendChild(li); // 아직 팀 없는 플레이어
                 } else {
                     playerList.appendChild(li);
                 }
@@ -483,7 +484,7 @@
         }
 
         async function handlePlayerAction(playerId, payload) {
-            if (!roundActive) return;
+            if (!roundActive || isGamePaused) return;
             const targetNumber = parseInt(payload.target, 10);
             const targetEnemy = enemies.find(e => e.number === targetNumber);
             if (targetEnemy) {
@@ -539,7 +540,7 @@
         async function startGame() {
             selectedCategories = [...categorySelector.querySelectorAll('.selected')].map(btn => btn.dataset.category);
             totalRounds = parseInt(roundsInput.value) || 10;
-            totalGameTime = (parseInt(timeLimitInput.value) || 3) * 60;
+            totalGameTime = (parseInt(timeLimitInput.value) || 1) * 60;
             if (selectedCategories.length === 0) {
                 alert('하나 이상의 카테고리를 선택해주세요.');
                 return;
@@ -629,6 +630,7 @@
         function startTotalGameTimer() {
             let timeLeft = totalGameTime;
             gameTimerId = setInterval(() => {
+                if(isGamePaused) return;
                 timeLeft--;
                 const minutes = Math.floor(timeLeft / 60);
                 const seconds = timeLeft % 60;
@@ -642,6 +644,8 @@
         function animate() {
             if (gameScreen.classList.contains('hidden')) return;
             requestAnimationFrame(animate);
+            if (isGamePaused) return;
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             for (const id in players) {
                 if(players[id].character) players[id].character.draw();
@@ -680,13 +684,19 @@
             await updateDoc(doc(db, "games", gameId), { state: "finished" });
 
             if (gameMode === 'team') {
-                const winnerTeam = teams.teamA.score > teams.teamB.score ? teams.teamA : teams.teamB;
-                const loserTeam = teams.teamA.score <= teams.teamB.score ? teams.teamA : teams.teamB;
+                const winnerTeamId = teams.teamA.score > teams.teamB.score ? 'teamA' : 'teamB';
+                const winnerTeam = teams[winnerTeamId];
+                const loserTeam = teams[winnerTeamId === 'teamA' ? 'teamB' : 'teamA'];
+                
+                const winningPlayers = Object.values(players).filter(p => p.team === winnerTeamId);
+                const mvp = winningPlayers.sort((a, b) => b.score - a.score)[0];
+
                 resultTitle.textContent = `🎉 ${winnerTeam.name} 승리! 🎉`;
                 finalRanking.innerHTML = `
                     <div class="p-6 bg-green-100 border-2 border-green-500 rounded-lg shadow-lg">
                         <h3 class="text-3xl font-bold text-green-700">${winnerTeam.name}</h3>
                         <p class="text-4xl">${winnerTeam.score}점</p>
+                        ${mvp ? `<p class="mt-2 text-lg">👑 최고 기여자: ${mvp.name} (${mvp.score}점)</p>` : ''}
                     </div>
                     <div class="p-4 bg-red-100 rounded-lg">
                         <h3 class="text-2xl font-bold text-red-700">${loserTeam.name}</h3>
@@ -698,7 +708,7 @@
                 finalRanking.innerHTML = '';
                 sortedPlayers.forEach((p, index) => {
                     const div = document.createElement('div');
-                    const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
+                    const rankEmoji = ['🥇', '🥈', '�'][index] || `${index + 1}위`;
                     div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
                     div.innerHTML = `<span class="font-bold">${rankEmoji} ${p.name}</span><span>${p.score}점</span>`;
                     finalRanking.appendChild(div);
@@ -737,16 +747,52 @@
                     playerListContainer.classList.add('hidden');
                     teamDisplay.classList.add('grid');
                     teamDisplay.classList.remove('hidden');
+                    teamAssignControls.classList.remove('hidden');
                     teamANameEl.textContent = teams.teamA.name;
                     teamBNameEl.textContent = teams.teamB.name;
                 } else {
                     playerListContainer.classList.remove('hidden');
                     teamDisplay.classList.add('hidden');
                     teamDisplay.classList.remove('grid');
+                    teamAssignControls.classList.add('hidden');
                 }
                 updatePlayerListUI();
             }
         });
+
+        async function handleManualAssign(e) {
+            if (!e.target.dataset.playerId) return;
+            const playerId = e.target.dataset.playerId;
+            const newTeam = prompt(`'${players[playerId].name}'님을 어느 팀으로 배정할까요? (A 또는 B)`);
+            if (newTeam && (newTeam.toUpperCase() === 'A' || newTeam.toUpperCase() === 'B')) {
+                await updateDoc(doc(db, "games", gameId, "players", playerId), {
+                    team: `team${newTeam.toUpperCase()}`
+                });
+            }
+        }
+        playerList.addEventListener('click', handleManualAssign);
+        teamAListEl.addEventListener('click', handleManualAssign);
+        teamBListEl.addEventListener('click', handleManualAssign);
+
+        autoAssignBtn.addEventListener('click', async () => {
+            const batch = writeBatch(db);
+            const playerIds = Object.keys(players);
+            playerIds.sort(() => Math.random() - 0.5); // Shuffle for randomness
+            playerIds.forEach((id, index) => {
+                const team = index % 2 === 0 ? 'teamA' : 'teamB';
+                const playerRef = doc(db, "games", gameId, "players", id);
+                batch.update(playerRef, { team: team });
+            });
+            await batch.commit();
+        });
+
+        pauseGameBtn.addEventListener('click', () => {
+            isGamePaused = !isGamePaused;
+            pauseGameBtn.textContent = isGamePaused ? '계속' : '일시정지';
+            pauseGameBtn.classList.toggle('bg-yellow-500');
+            pauseGameBtn.classList.toggle('bg-green-500');
+        });
+        forceEndGameBtn.addEventListener('click', endGame);
 
         startGameButton.addEventListener('click', startGame);
         restartButton.addEventListener('click', () => window.location.reload());
