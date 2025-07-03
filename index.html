@@ -26,7 +26,7 @@
         .mole.up { bottom: 10%; }
         .mole img { width: 100%; display: block; }
         .mole .word-plate { position: absolute; bottom: 90%; left: 50%; transform: translateX(-50%); background: #fff; border: 3px solid #663300; border-radius: 8px; padding: 2px 8px; font-size: 1.2rem; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-        .hit-effect { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 4rem; opacity: 0; animation: fade-out 0.5s; }
+        .hit-effect { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 4rem; opacity: 0; animation: fade-out 0.5s; pointer-events: none; }
         @keyframes fade-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -70%) scale(1.2); } }
     </style>
 </head>
@@ -41,7 +41,6 @@
             <div class="max-w-4xl mx-auto bg-white/70 p-4 rounded-lg shadow-md mb-6">
                 <h3 class="text-xl font-bold text-gray-700 mb-3">게임 설정</h3>
                 
-                <!-- 게임 방식 선택 -->
                 <div class="mb-4">
                     <label class="font-bold">게임 방식:</label>
                     <div id="gameplay-mode-selector" class="inline-flex rounded-md shadow-sm" role="group">
@@ -231,7 +230,6 @@
         const restartButton = document.getElementById('restart-button');
         const categorySelector = document.getElementById('category-selector');
         
-        // Player & Team Lists
         const playerListContainer = document.getElementById('player-list-container');
         const playerList = document.getElementById('player-list');
         const teamDisplay = document.getElementById('team-display');
@@ -240,7 +238,6 @@
         const teamAListEl = document.getElementById('team-a-list');
         const teamBListEl = document.getElementById('team-b-list');
         
-        // Settings Elements
         const gameplayModeSelector = document.getElementById('gameplay-mode-selector');
         const fillInBlankSettings = document.getElementById('fill-in-blank-settings');
         const moleWhackSettings = document.getElementById('mole-whack-settings');
@@ -255,7 +252,6 @@
         const teamThemeSelector = document.getElementById('team-theme-selector');
         const teamAssignSelector = document.getElementById('team-assign-selector');
         
-        // Buttons
         const reshuffleBtn = document.getElementById('reshuffle-btn');
         const pauseGameBtn = document.getElementById('pause-game-btn');
         const forceEndGameBtn = document.getElementById('force-end-game-btn');
@@ -263,7 +259,6 @@
         const soundOnIcon = document.getElementById('sound-on-icon');
         const soundOffIcon = document.getElementById('sound-off-icon');
 
-        // Canvases
         const fillInBlankCanvas = document.getElementById('fill-in-blank-canvas');
         const ctx = fillInBlankCanvas.getContext('2d');
         const moleWhackCanvas = document.getElementById('mole-whack-canvas');
@@ -271,7 +266,7 @@
 
         // --- State Variables ---
         let gameId;
-        let gameplayMode = 'fill-in-blank'; // 'fill-in-blank' or 'mole-whack'
+        let gameplayMode = 'fill-in-blank';
         let players = {};
         let teams = {};
         let gameMode = 'personal';
@@ -289,12 +284,9 @@
         let isGamePaused = false;
         let synth;
         let isSoundEnabled = true;
-
         let selectedCategories = [];
         let totalRounds = 10;
         let totalGameTime = 60;
-        
-        // Mole Game State
         let moles = [];
         let moleGameInterval = null;
         let currentMoleSpeed = 1.5;
@@ -312,10 +304,140 @@
         };
         
         // --- Classes for Fill-in-Blank Game ---
-        class PlayerCharacter { /* ... (same as before) ... */ }
-        class Enemy { /* ... (same as before) ... */ }
-        class Particle { /* ... (same as before) ... */ }
-        class Beam { /* ... (same as before) ... */ }
+        class PlayerCharacter {
+            constructor(id, name, teamId) {
+                this.id = id;
+                this.name = name;
+                this.teamId = teamId;
+                this.width = 50;
+                this.height = 40;
+                this.x = Math.random() * (fillInBlankCanvas.width - this.width);
+                this.y = fillInBlankCanvas.height - this.height - 10;
+                this.flash = 0;
+                
+                const sheepSVG = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 64 49">
+                      <g fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3">
+                        <path d="M20,25 a10,10 0 1,1 20,0 a15,15 0 1,1 -20,0" transform="translate(0, 5)"/>
+                        <circle cx="15" cy="20" r="8"/><circle cx="45" cy="20" r="8"/><circle cx="30" cy="12" r="10"/>
+                        <g fill="#000" stroke="none"><circle cx="25" cy="30" r="1.5"/><circle cx="35" cy="30" r="1.5"/></g>
+                        <path d="M 28 35 q 2 -3 4 0" stroke="black" fill="none" stroke-width="1"/>
+                      </g>
+                      <rect x="20" y="38" width="5" height="7" rx="2" fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3" /><rect x="35" y="38" width="5" height="7" rx="2" fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3"/>
+                    </svg>`;
+                this.image = new Image();
+                this.image.src = `data:image/svg+xml;base64,${btoa(sheepSVG)}`;
+            }
+            draw() {
+                if (this.flash > 0) {
+                    ctx.globalAlpha = 0.5 + (Math.sin(Date.now() / 50) * 0.5);
+                    this.flash--;
+                }
+                ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+                ctx.globalAlpha = 1.0;
+                ctx.fillStyle = this.teamId === 'teamA' ? '#3b82f6' : '#ef4444';
+                ctx.textAlign = 'center';
+                ctx.font = 'bold 14px Gowun Dodum';
+                ctx.fillText(this.name, this.x + this.width / 2, this.y - 5);
+            }
+            shoot() {
+                this.flash = 30;
+                const beamColor = this.teamId === 'teamA' ? '59, 130, 246' : '239, 68, 68';
+                beams.push(new Beam(this.x + this.width / 2, this.y, beamColor));
+            }
+        }
+        
+        class Enemy {
+             constructor(x, y, word, isCorrect, number) {
+                this.x = x; this.y = y;
+                this.speed = (Math.random() * 0.5 + 0.8) * difficultySettings.speed;
+                this.word = word; this.isCorrect = isCorrect;
+                this.number = number;
+                ctx.font = 'bold 30px Gowun Dodum';
+                this.width = ctx.measureText(this.word).width + 40;
+                this.height = 50;
+
+                const monsterSVG = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="${this.width}" height="${this.height}">
+                        <path d="M5,45 C5,20 45,20 45,45 Q40,40 35,45 C30,40 20,40 15,45 Q10,40 5,45 Z" fill="#4A5568"/>
+                        <circle cx="18" cy="25" r="4" fill="white">
+                            <animate attributeName="cy" values="25;22;25" dur="1s" repeatCount="indefinite" />
+                        </circle>
+                        <circle cx="32" cy="25" r="4" fill="white">
+                            <animate attributeName="cy" values="25;22;25" dur="1s" repeatCount="indefinite" />
+                        </circle>
+                    </svg>`;
+                this.image = new Image();
+                this.image.src = `data:image/svg+xml;base64,${btoa(monsterSVG)}`;
+            }
+            draw() {
+                ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+                ctx.font = 'bold 30px Gowun Dodum';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 6;
+                ctx.strokeText(this.word, this.x + this.width / 2, this.y + this.height / 2 + 2);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillText(this.word, this.x + this.width / 2, this.y + this.height / 2 + 2);
+                
+                ctx.font = 'bold 22px Arial';
+                ctx.fillStyle = 'yellow';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.strokeText(this.number, this.x + this.width / 2, this.y - 10);
+                ctx.fillText(this.number, this.x + this.width / 2, this.y - 10);
+            }
+            update() { 
+                if (!isGamePaused) this.y += this.speed;
+                this.draw();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y;
+                this.radius = Math.random() * 4 + 2;
+                this.speedX = Math.random() * 6 - 3;
+                this.speedY = Math.random() * 6 - 3;
+                this.life = 100;
+                this.color = color;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(${this.color}, ${this.life / 100})`;
+                ctx.fill();
+            }
+            update() {
+                if (isGamePaused) return;
+                this.x += this.speedX; this.y += this.speedY;
+                this.life -= 3;
+                this.draw();
+            }
+        }
+
+        class Beam {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.width = 15;
+                this.life = 15; 
+            }
+            draw() {
+                const alpha = this.life / 15;
+                ctx.fillStyle = `rgba(${this.color}, ${alpha * 0.8})`;
+                ctx.shadowColor = `rgb(${this.color})`;
+                ctx.shadowBlur = 20;
+                ctx.fillRect(this.x - this.width / 2, 0, this.width, this.y);
+                ctx.shadowBlur = 0;
+            }
+            update() {
+                if (!isGamePaused) this.life--;
+            }
+        }
         
         // --- Audio Functions ---
         function setupAudio() {
@@ -346,12 +468,134 @@
 
         // --- Core Game Logic ---
         async function initializeHost() {
-            // ... (same as before, no changes needed here)
+            const nameTheme = teamNameThemes[teamTheme];
+            const teamAIndex = Math.floor(Math.random() * nameTheme.length);
+            let teamBIndex;
+            do {
+                teamBIndex = Math.floor(Math.random() * nameTheme.length);
+            } while (teamAIndex === teamBIndex);
+            
+            teams = {
+                teamA: { name: nameTheme[teamAIndex], score: 0 },
+                teamB: { name: nameTheme[teamBIndex], score: 0 }
+            };
+
+            const gameDocRef = await addDoc(collection(db, "games"), {
+                state: "lobby",
+                createdAt: serverTimestamp(),
+                mode: gameMode,
+                assignMode: assignMode,
+                teams: teams,
+                settings: { gameplayMode: gameplayMode }
+            });
+            gameId = gameDocRef.id;
+            gameIdDisplay.textContent = gameId;
+            const joinUrl = `${window.location.origin}/join.html?gameId=${gameId}`;
+            pcJoinUrlInput.value = joinUrl;
+            pcJoinUrlContainer.classList.remove('hidden');
+            const qr = qrcode(0, 'L');
+            qr.addData(joinUrl);
+            qr.make();
+            qrcodeContainer.innerHTML = qr.createImgTag(6);
+            
+            const playersQuery = query(collection(db, "games", gameId, "players"));
+            
+            playersUnsubscribe = onSnapshot(playersQuery, (snapshot) => {
+                const currentPlayersInDB = {};
+                 snapshot.forEach(doc => {
+                    currentPlayersInDB[doc.id] = doc.data();
+                });
+
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === "added") {
+                        const newPlayerId = change.doc.id;
+                        const newPlayerData = change.doc.data();
+                        if (gameMode === 'team' && assignMode === 'auto' && !newPlayerData.team) {
+                            const teamAPlayers = Object.values(players).filter(p => p.team === 'teamA').length;
+                            const teamBPlayers = Object.values(players).filter(p => p.team === 'teamB').length;
+                            const teamToAssign = teamAPlayers <= teamBPlayers ? 'teamA' : 'teamB';
+                            updateDoc(doc(db, "games", gameId, "players", newPlayerId), { team: teamToAssign });
+                        }
+                    }
+                });
+                
+                players = {};
+                 for (const id in currentPlayersInDB) {
+                    players[id] = { ...currentPlayersInDB[id], character: null };
+                }
+
+                updatePlayerListUI();
+                if (gameMode === 'personal') {
+                    updateScoreboard(players);
+                }
+                
+                startGameButton.disabled = Object.keys(players).length === 0;
+            });
+
+            onSnapshot(doc(db, "games", gameId), (docSnap) => {
+                if (docSnap.exists() && docSnap.data().teams) {
+                    const gameData = docSnap.data();
+                    teams = gameData.teams;
+                    gameMode = gameData.mode;
+                     if (gameMode === 'team') {
+                        teamANameEl.textContent = teams.teamA.name;
+                        teamBNameEl.textContent = teams.teamB.name;
+                        updateTeamScoreboard();
+                    }
+                }
+            });
         }
 
-        function updatePlayerListUI() { /* ... (same as before) ... */ }
-        function updateScoreboard(playerData) { /* ... (same as before) ... */ }
-        function updateTeamScoreboard() { /* ... (same as before) ... */ }
+        function updatePlayerListUI() {
+            playerList.innerHTML = '';
+            teamAListEl.innerHTML = '';
+            teamBListEl.innerHTML = '';
+            const playerIds = Object.keys(players);
+            playerCountEl.textContent = playerIds.length;
+            
+            if (playerIds.length === 0) {
+                playerList.innerHTML = '<li class="text-gray-500 p-2">아직 참가자가 없습니다...</li>';
+                return;
+            }
+
+            playerIds.forEach(id => {
+                const playerData = players[id];
+                const li = document.createElement('li');
+                li.className = 'player-item p-2 rounded-md';
+                li.textContent = `🐑 ${playerData.name}`;
+                li.dataset.playerId = id;
+
+                if (gameMode === 'team') {
+                    if (playerData.team === 'teamA') teamAListEl.appendChild(li);
+                    else if (playerData.team === 'teamB') teamBListEl.appendChild(li);
+                    else playerList.appendChild(li); 
+                } else {
+                    playerList.appendChild(li);
+                }
+            });
+        }
+
+        function updateScoreboard(playerData) {
+            scoreboard.innerHTML = '';
+            const sortedPlayers = Object.entries(playerData).sort((a, b) => b[1].score - a[1].score);
+            for (const [id, data] of sortedPlayers) {
+                const div = document.createElement('div');
+                div.className = 'p-2 bg-white/80 rounded-md shadow text-center';
+                div.innerHTML = `<div class="font-bold text-lg">${data.name}</div><div class="text-xl">${data.score}점</div>`;
+                scoreboard.appendChild(div);
+            }
+        }
+
+        function updateTeamScoreboard() {
+            scoreboard.innerHTML = '';
+            Object.entries(teams).forEach(([teamId, teamData]) => {
+                const color = teamId === 'teamA' ? 'blue' : 'red';
+                const div = document.createElement('div');
+                div.className = `p-4 bg-${color}-100 border-2 border-${color}-500 rounded-lg shadow-lg text-center`;
+                div.innerHTML = `<div class="font-bold text-2xl text-${color}-700">${teamData.name}</div><div class="text-3xl">${teamData.score}점</div>`;
+                scoreboard.appendChild(div);
+            });
+        }
         
         function listenForActions() {
             const actionsRef = collection(db, "games", gameId, "actions");
@@ -369,7 +613,58 @@
             });
         }
 
-        async function handlePlayerAction(playerId, payload) { /* ... (same as before) ... */ }
+        async function handlePlayerAction(playerId, payload) {
+            if (!roundActive || isGamePaused) return;
+            const targetNumber = parseInt(payload.target, 10);
+            const targetEnemy = enemies.find(e => e.number === targetNumber);
+            if (targetEnemy) {
+                const player = players[playerId];
+                if (player && player.character) {
+                    player.character.x = targetEnemy.x + (targetEnemy.width / 2) - (player.character.width / 2);
+                    player.character.shoot();
+                }
+
+                try {
+                    await runTransaction(db, async (transaction) => {
+                        const playerDocRef = doc(db, "games", gameId, "players", playerId);
+                        const gameDocRef = doc(db, "games", gameId);
+                        const playerDoc = await transaction.get(playerDocRef);
+                        const gameDoc = await transaction.get(gameDocRef);
+
+                        if (!playerDoc.exists() || !gameDoc.exists() || !roundActive) return;
+                        
+                        const currentScore = playerDoc.data().score || 0;
+                        const currentTeam = playerDoc.data().team;
+                        const currentTeams = gameDoc.data().teams;
+
+                        if (targetEnemy.isCorrect) {
+                            roundActive = false;
+                            playCorrectSound();
+                            
+                            transaction.update(playerDocRef, { score: currentScore + difficultySettings.points });
+                            if (gameMode === 'team' && currentTeam) {
+                                const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.points;
+                                transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
+                            }
+
+                            for(let i = 0; i < 30; i++) {
+                                particles.push(new Particle(targetEnemy.x + targetEnemy.width/2, targetEnemy.y + targetEnemy.height/2, '255, 215, 0'));
+                            }
+                            enemies = [];
+                            setTimeout(() => nextRound(), 2000);
+                        } else {
+                            playIncorrectSound();
+                            if (gameMode === 'team' && currentTeam) {
+                                const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.penalty;
+                                transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error("Transaction failed: ", e);
+                }
+            }
+        }
         
         async function handleMoleWhackAction(playerId, payload) {
             if (!roundActive || isGamePaused) return;
@@ -377,11 +672,10 @@
             const holeIndex = payload.holeIndex;
             const mole = moles[holeIndex];
             
-            if (!mole || !mole.isUp) return; // Mole not present or already hit
+            if (!mole || !mole.isUp) return;
 
             playWhackSound();
             
-            // Show hit effect on host screen
             const holeElement = document.getElementById(`mole-hole-${holeIndex}`);
             const effect = document.createElement('div');
             effect.className = 'hit-effect';
@@ -394,7 +688,7 @@
             holeElement.appendChild(effect);
             setTimeout(() => effect.remove(), 500);
 
-            mole.hide(); // Hide the mole immediately after whacking
+            mole.hide();
 
             try {
                 await runTransaction(db, async (transaction) => {
@@ -419,12 +713,11 @@
                             transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
                         }
                         
-                        // Stop timers and move to next round
                         clearInterval(moleGameInterval);
                         clearInterval(roundTimerId);
                         setTimeout(() => nextRound(), 2000);
 
-                    } else { // Incorrect whack
+                    } else {
                         playIncorrectSound();
                         transaction.update(playerDocRef, { score: currentScore + difficultySettings.penalty });
                         if (gameMode === 'team' && currentTeam) {
@@ -464,13 +757,13 @@
                 startTotalGameTimer();
                 animate();
                 settings = { categories: selectedCategories, rounds: totalRounds, time: totalGameTime, gameplayMode };
-            } else { // mole-whack
+            } else {
                 totalRounds = parseInt(moleRoundsInput.value) || 10;
                 currentMoleSpeed = parseFloat(moleSpeedInput.value) || 1.5;
                 fillInBlankCanvas.classList.add('hidden');
                 moleWhackCanvas.classList.remove('hidden');
                 createMoleGrid();
-                settings = { categories: selectedCategories, rounds: totalRounds, moleSpeed: currentMoleSpeed, gameplayMode };
+                settings = { categories: selectedCategories, rounds: totalRounds, moleSpeed: currentMoleSpeed, moleTimeLimit: parseInt(moleTimeLimitInput.value), gameplayMode };
             }
 
             await updateDoc(doc(db, "games", gameId), { 
@@ -489,7 +782,6 @@
             }
             currentRound++;
             roundCounterEl.textContent = `${currentRound} / ${totalRounds}`;
-            playRoundStartSound();
             
             if (gameplayMode === 'fill-in-blank') {
                 await nextRoundFillInBlank();
@@ -498,12 +790,64 @@
             }
         }
 
-        async function nextRoundFillInBlank() { /* ... (same as original nextRound) ... */ }
+        async function nextRoundFillInBlank() {
+            roundActive = true;
+            playRoundStartSound();
+            enemies = [];
+            particles = [];
+            beams = [];
+            
+            let filteredVerses = versesData;
+            if (!selectedCategories.includes('전체')) {
+                filteredVerses = versesData.filter(v => v.카테고리 && selectedCategories.includes(v.카테고리));
+            }
+            if (filteredVerses.length === 0) {
+                alert('선택한 카테고리에 해당하는 말씀 구절이 없습니다. 게임을 종료합니다.');
+                endGame();
+                return;
+            }
+            
+            let verse, words, blankIndex, candidateWords;
+            let attempts = 0;
+            do {
+                verse = filteredVerses[Math.floor(Math.random() * filteredVerses.length)];
+                words = verse.본문.split(' ').filter(w => w.trim().length > 0);
+                candidateWords = words.filter(isValidBlankWord);
+                attempts++;
+            } while (candidateWords.length === 0 && attempts < 50);
+
+            if (candidateWords.length === 0) {
+                candidateWords = words.filter(w => w.length > 1);
+                if(candidateWords.length === 0) { nextRound(); return; }
+            }
+
+            currentBlankWord = candidateWords[Math.floor(Math.random() * candidateWords.length)];
+            blankIndex = words.indexOf(currentBlankWord);
+            
+            const distractors = generateDistractors(currentBlankWord, versesData);
+
+            const options = [currentBlankWord, ...distractors];
+            options.sort(() => Math.random() - 0.5);
+            options.forEach((word, i) => {
+                const x = (fillInBlankCanvas.width / (options.length + 1)) * (i + 1) - 50;
+                enemies.push(new Enemy(x, -60, word, word === currentBlankWord, i + 1));
+            });
+            const questionPayload = {
+                verse: `[${verse.장절}]`,
+                text: words.map((w, i) => (i === blankIndex ? '_______' : w)).join(' '),
+            };
+            questionVerseEl.textContent = questionPayload.verse;
+            questionTextEl.textContent = questionPayload.text;
+            await updateDoc(doc(db, "games", gameId), {
+                currentRound,
+                question: questionPayload,
+            });
+        }
         
         async function nextRoundMoleWhack() {
             roundActive = true;
+            playRoundStartSound();
             
-            // Difficulty scaling
             const baseSpeed = parseFloat(moleSpeedInput.value) || 1.5;
             currentMoleSpeed = Math.max(0.5, baseSpeed - (currentRound * 0.05));
 
@@ -522,16 +866,15 @@
 
             const allFirstWords = Array.from(new Set(versesData.map(v => v.본문.split(' ')[0].replace(/[.,!?]/g, ''))));
             const distractors = [];
-            while(distractors.length < 8) { // Get enough for all holes
+            while(distractors.length < 8) {
                 const randomWord = allFirstWords[Math.floor(Math.random() * allFirstWords.length)];
                 if (randomWord !== firstWord && !distractors.includes(randomWord)) {
                     distractors.push(randomWord);
                 }
             }
 
-            // Prepare moles for all 9 holes
             moles.forEach(mole => mole.reset());
-            const wordsForRound = [firstWord, ...distractors.slice(0, 8)];
+            const wordsForRound = [firstWord, ...distractors];
             wordsForRound.sort(() => Math.random() - 0.5);
 
             moles.forEach((mole, index) => {
@@ -556,6 +899,7 @@
         }
 
         function startRoundTimer() {
+            clearInterval(roundTimerId);
             let timeLeft = parseInt(moleTimeLimitInput.value);
             timerEl.textContent = String(timeLeft).padStart(2, '0');
             roundTimerId = setInterval(() => {
@@ -565,20 +909,22 @@
                 if (timeLeft <= 0) {
                     clearInterval(roundTimerId);
                     clearInterval(moleGameInterval);
-                    roundActive = false;
-                    setTimeout(() => nextRound(), 2000); // Move to next round after a delay
+                    if (roundActive) {
+                        roundActive = false;
+                        setTimeout(() => nextRound(), 2000);
+                    }
                 }
             }, 1000);
         }
 
         function startMoleGameLoop() {
+            clearInterval(moleGameInterval);
             moleGameInterval = setInterval(() => {
                 if (!roundActive || isGamePaused) return;
 
                 const availableMoles = moles.filter(m => !m.isUp);
                 if (availableMoles.length === 0) return;
 
-                // Pop up to 3 moles
                 const molesToPop = Math.min(3, availableMoles.length);
                 for (let i = 0; i < molesToPop; i++) {
                     const moleIndex = Math.floor(Math.random() * availableMoles.length);
@@ -587,7 +933,7 @@
                         mole.pop();
                     }
                 }
-            }, 1000); // Interval to decide when to pop new moles
+            }, 1000);
         }
 
         function createMoleGrid() {
@@ -631,12 +977,60 @@
             }
         }
         
-        function startTotalGameTimer() { /* ... (same as before) ... */ }
+        function startTotalGameTimer() {
+            let timeLeft = totalGameTime;
+            timerEl.textContent = `${String(Math.floor(timeLeft/60)).padStart(2, '0')}:${String(timeLeft%60).padStart(2, '0')}`;
+            gameTimerId = setInterval(() => {
+                if(isGamePaused) return;
+                timeLeft--;
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                timerEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
 
         function animate() {
             if (gameplayMode !== 'fill-in-blank' || gameScreen.classList.contains('hidden')) return;
             requestAnimationFrame(animate);
-            // ... (rest of the animate function for fill-in-blank)
+            if (isGamePaused) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, fillInBlankCanvas.width, fillInBlankCanvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 48px Gowun Dodum';
+                ctx.textAlign = 'center';
+                ctx.fillText('일시정지됨', fillInBlankCanvas.width / 2, fillInBlankCanvas.height / 2);
+                return;
+            }
+
+            ctx.clearRect(0, 0, fillInBlankCanvas.width, fillInBlankCanvas.height);
+            for (const id in players) {
+                if(players[id].character) players[id].character.draw();
+            }
+            enemies.forEach((e, i) => {
+                if (e.y > fillInBlankCanvas.height) {
+                    enemies.splice(i, 1);
+                } else {
+                    e.update();
+                }
+            });
+            if (roundActive && enemies.length === 0) {
+                roundActive = false;
+                setTimeout(() => nextRound(), 1500);
+            }
+            
+            beams.forEach(b => b.draw());
+            beams.forEach((b, i) => {
+                b.update();
+                if (b.life <= 0) beams.splice(i, 1);
+            });
+            
+            particles.forEach((p, i) => {
+                p.update();
+                if (p.life <= 0) particles.splice(i, 1);
+            });
         }
 
         async function endGame() {
@@ -645,14 +1039,101 @@
             clearInterval(gameTimerId);
             clearInterval(roundTimerId);
             clearInterval(moleGameInterval);
-            // ... (rest of the endGame function is the same)
+            playFinishSound();
+            if (actionsUnsubscribe) actionsUnsubscribe();
+            gameScreen.classList.add('hidden');
+            resultScreen.classList.remove('hidden');
+            await updateDoc(doc(db, "games", gameId), { state: "finished" });
+
+            if (gameMode === 'team') {
+                 const winnerTeamId = teams.teamA.score > teams.teamB.score ? 'teamA' : (teams.teamB.score > teams.teamA.score ? 'teamB' : null);
+                
+                if (winnerTeamId) {
+                    const winnerTeam = teams[winnerTeamId];
+                    const loserTeam = teams[winnerTeamId === 'teamA' ? 'teamB' : 'teamA'];
+                    
+                    const winningPlayers = Object.values(players).filter(p => p.team === winnerTeamId);
+                    const mvp = winningPlayers.length > 0 ? winningPlayers.sort((a, b) => b.score - a.score)[0] : null;
+
+                    resultTitle.textContent = `🎉 ${winnerTeam.name} 팀 승리! 🎉`;
+                    finalRanking.innerHTML = `
+                        <div class="p-6 bg-green-100 border-2 border-green-500 rounded-lg shadow-lg">
+                            <h3 class="text-3xl font-bold text-green-700">${winnerTeam.name}</h3>
+                            <p class="text-4xl">${winnerTeam.score}점</p>
+                            ${mvp ? `<p class="mt-2 text-lg">👑 최고 기여자: ${mvp.name} (${mvp.score}점)</p>` : ''}
+                        </div>
+                        <div class="p-4 bg-gray-100 rounded-lg">
+                            <h3 class="text-2xl font-bold text-gray-700">${loserTeam.name}</h3>
+                            <p class="text-3xl">${loserTeam.score}점</p>
+                        </div>
+                    `;
+                } else {
+                     resultTitle.textContent = `무승부!`;
+                     finalRanking.innerHTML = `
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-6 bg-blue-100 border-2 border-blue-500 rounded-lg shadow-lg">
+                                <h3 class="text-3xl font-bold text-blue-700">${teams.teamA.name}</h3>
+                                <p class="text-4xl">${teams.teamA.score}점</p>
+                            </div>
+                            <div class="p-6 bg-red-100 border-2 border-red-500 rounded-lg shadow-lg">
+                                <h3 class="text-3xl font-bold text-red-700">${teams.teamB.name}</h3>
+                                <p class="text-4xl">${teams.teamB.score}점</p>
+                            </div>
+                        </div>
+                     `;
+                }
+            } else {
+                resultTitle.textContent = '🎉 최종 결과 🎉';
+                const sortedPlayers = Object.values(players).sort((a,b) => b.score - a.score);
+                finalRanking.innerHTML = '';
+                sortedPlayers.forEach((p, index) => {
+                    const div = document.createElement('div');
+                    const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
+                    div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
+                    div.innerHTML = `<span class="font-bold">${rankEmoji} ${p.name}</span><span>${p.score}점</span>`;
+                    finalRanking.appendChild(div);
+                });
+            }
         }
 
-        function isValidBlankWord(word) { /* ... (same as before) ... */ }
-        function generateDistractors(correctWord, allVerses) { /* ... (same as before) ... */ }
+        function isValidBlankWord(word) {
+            const particlesAndEndings = ['은', '는', '이', '가', '을', '를', '의', '에', '에게', '께', '에서', '으로', '로', '와', '과', '도', '만', '뿐', '까지', '마저', '조차', '부터', '하고', '이며', '이라', '다', '요', '죠', '고', '며', '니', '네', '라', '나', '까', '습니다', 'ㅂ니다', '어요', '아요'];
+            const cleanWord = word.replace(/[.,!?]/g, '');
+            if (cleanWord.length <= 1) return false;
+            for (const p of particlesAndEndings) {
+                if (cleanWord.endsWith(p)) return false;
+            }
+            return true;
+        }
+
+        function generateDistractors(correctWord, allVerses) {
+            const candidatePool = Array.from(new Set(
+                allVerses
+                    .flatMap(v => v.본문.split(' '))
+                    .map(w => w.replace(/[.,!?]/g, ''))
+                    .filter(w => w.length > 1 && w !== correctWord)
+            ));
+
+            for (let i = candidatePool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [candidatePool[i], candidatePool[j]] = [candidatePool[j], candidatePool[i]];
+            }
+            
+            const distractors = new Set(candidatePool.slice(0, 2));
+
+            const genericDistractors = ["사랑", "믿음", "소망", "예수", "하나님", "천국", "기도", "말씀"];
+            while (distractors.size < 2) {
+                const genericWord = genericDistractors[Math.floor(Math.random() * genericDistractors.length)];
+                if (genericWord !== correctWord && !distractors.has(genericWord)) {
+                    distractors.add(genericWord);
+                }
+            }
+            
+            return Array.from(distractors);
+        }
 
         // --- Event Listeners ---
-        gameplayModeSelector.addEventListener('click', (e) => {
+        gameplayModeSelector.addEventListener('click', async (e) => {
             if (e.target.tagName !== 'BUTTON') return;
             gameplayMode = e.target.dataset.gameplay;
             gameplayModeSelector.querySelectorAll('.gameplay-btn').forEach(btn => btn.classList.remove('selected'));
@@ -660,20 +1141,112 @@
 
             fillInBlankSettings.classList.toggle('hidden', gameplayMode !== 'fill-in-blank');
             moleWhackSettings.classList.toggle('hidden', gameplayMode !== 'mole-whack');
+            
+            if (gameId) {
+                 await updateDoc(doc(db, "games", gameId), { "settings.gameplayMode": gameplayMode });
+            }
         });
 
-        gameModeSelector.addEventListener('click', async (e) => { /* ... (same as before) ... */ });
-        teamThemeSelector.addEventListener('click', async (e) => { /* ... (same as before) ... */ });
-        teamAssignSelector.addEventListener('click', async (e) => { /* ... (same as before) ... */ });
-        reshuffleBtn.addEventListener('click', async () => { /* ... (same as before) ... */ });
-        pauseGameBtn.addEventListener('click', () => { /* ... (same as before) ... */ });
+        gameModeSelector.addEventListener('click', async (e) => {
+            if (e.target.tagName !== 'BUTTON') return;
+            gameMode = e.target.dataset.mode;
+            gameModeSelector.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('selected'));
+            e.target.classList.add('selected');
+            if (gameId) await updateDoc(doc(db, "games", gameId), { mode: gameMode });
+            teamSettingsContainer.classList.toggle('hidden', gameMode !== 'team');
+            playerListContainer.classList.toggle('hidden', gameMode === 'team');
+            teamDisplay.classList.toggle('hidden', gameMode !== 'team');
+            teamDisplay.classList.toggle('grid', gameMode === 'team');
+            updatePlayerListUI();
+        });
+        
+        teamThemeSelector.addEventListener('click', async (e) => {
+            if (e.target.tagName !== 'BUTTON') return;
+            teamTheme = e.target.dataset.theme;
+            teamThemeSelector.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('selected'));
+            e.target.classList.add('selected');
+            const nameTheme = teamNameThemes[teamTheme];
+            const teamAIndex = Math.floor(Math.random() * nameTheme.length);
+            let teamBIndex;
+            do { teamBIndex = Math.floor(Math.random() * nameTheme.length); } while (teamAIndex === teamBIndex);
+            teams.teamA.name = nameTheme[teamAIndex];
+            teams.teamB.name = nameTheme[teamBIndex];
+            teamANameEl.textContent = teams.teamA.name;
+            teamBNameEl.textContent = teams.teamB.name;
+            if (gameId) await updateDoc(doc(db, "games", gameId), { teams: teams });
+        });
+
+        teamAssignSelector.addEventListener('click', async (e) => {
+            if (e.target.tagName !== 'BUTTON') return;
+            assignMode = e.target.dataset.assign;
+            teamAssignSelector.querySelectorAll('.assign-btn').forEach(btn => btn.classList.remove('selected'));
+            e.target.classList.add('selected');
+            if (gameId) await updateDoc(doc(db, "games", gameId), { assignMode: assignMode });
+        });
+
+        reshuffleBtn.addEventListener('click', async () => {
+            const batch = writeBatch(db);
+            const playerIds = Object.keys(players);
+            playerIds.sort(() => Math.random() - 0.5); 
+            playerIds.forEach((id, index) => {
+                const team = index % 2 === 0 ? 'teamA' : 'teamB';
+                const playerRef = doc(db, "games", gameId, "players", id);
+                batch.update(playerRef, { team: team });
+            });
+            await batch.commit();
+        });
+
+        pauseGameBtn.addEventListener('click', () => {
+            isGamePaused = !isGamePaused;
+            pauseGameBtn.textContent = isGamePaused ? '계속' : '일시정지';
+            pauseGameBtn.classList.toggle('bg-yellow-500', !isGamePaused);
+            pauseGameBtn.classList.toggle('bg-green-500', isGamePaused);
+            if(gameId) updateDoc(doc(db,"games", gameId), { paused: isGamePaused });
+        });
+        
         forceEndGameBtn.addEventListener('click', endGame);
         startGameButton.addEventListener('click', startGame);
         restartButton.addEventListener('click', () => window.location.reload());
-        copyUrlButton.addEventListener('click', () => { /* ... (same as before) ... */ });
+        copyUrlButton.addEventListener('click', () => {
+            pcJoinUrlInput.select();
+            document.execCommand('copy');
+            copyUrlButton.textContent = '복사됨!';
+            setTimeout(() => { copyUrlButton.textContent = '복사'; }, 1500);
+        });
         soundToggleBtn.addEventListener('click', toggleSound);
 
-        async function loadDataAndInit() { /* ... (same as before) ... */ }
+        async function loadDataAndInit() {
+            try {
+                const response = await fetch('verses.json');
+                if (!response.ok) throw new Error('verses.json을 불러올 수 없습니다.');
+                versesData = await response.json();
+                const categories = ['전체', ...new Set(versesData.map(v => v.카테고리).filter(Boolean))];
+                categorySelector.innerHTML = '';
+                categories.forEach(cat => {
+                    const btn = document.createElement('button');
+                    btn.textContent = cat;
+                    btn.dataset.category = cat;
+                    btn.className = 'category-btn p-2 border rounded-md bg-white hover:bg-sky-200 transition';
+                    if (cat === '전체') btn.classList.add('selected');
+                    btn.addEventListener('click', () => {
+                        btn.classList.toggle('selected');
+                        const isAllSelected = categorySelector.querySelector('[data-category="전체"]').classList.contains('selected');
+                        if (btn.dataset.category === '전체' && btn.classList.contains('selected')) {
+                            categorySelector.querySelectorAll('.category-btn').forEach(b => {
+                                if (b !== btn) b.classList.remove('selected');
+                            });
+                        } else if (btn.dataset.category !== '전체' && btn.classList.contains('selected')) {
+                             if(isAllSelected) categorySelector.querySelector('[data-category="전체"]').classList.remove('selected');
+                        }
+                    });
+                    categorySelector.appendChild(btn);
+                });
+                await initializeHost();
+            } catch (error) {
+                console.error("초기화 오류:", error);
+                alert("게임을 초기화하는 데 실패했습니다. 페이지를 새로고침 해주세요.");
+            }
+        }
 
         loadDataAndInit();
     </script>
