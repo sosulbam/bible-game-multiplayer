@@ -15,21 +15,18 @@
 <body class="bg-gray-100">
 
     <div id="controller-ui" class="fixed inset-0 flex flex-col justify-around p-4 hidden">
-        <!-- 상단 정보 -->
         <div class="text-center">
             <p id="team-name-display" class="text-lg font-bold text-gray-500 mb-1"></p>
             <h2 id="player-name" class="text-2xl font-bold">플레이어</h2>
             <p class="text-4xl font-bold text-sky-600"><span id="player-score">0</span>점</p>
         </div>
 
-        <!-- 조준 공격 버튼 -->
         <div class="flex justify-center items-center gap-4">
             <button data-target="1" class="target-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg control-btn flex items-center justify-center">1</button>
             <button data-target="2" class="target-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg control-btn flex items-center justify-center">2</button>
             <button data-target="3" class="target-btn bg-sky-500 text-white font-bold w-24 h-24 md:w-32 md:h-32 rounded-full text-5xl shadow-lg control-btn flex items-center justify-center">3</button>
         </div>
 
-        <!-- 하단 메시지 -->
         <div id="message-area" class="text-center h-10">
             <p id="round-message" class="text-xl text-gray-600"></p>
         </div>
@@ -38,6 +35,11 @@
     <div id="waiting-screen" class="fixed inset-0 flex items-center justify-center p-4">
         <p class="text-2xl text-gray-700 animate-pulse">게임이 끝나면 여기에 결과가 표시됩니다.</p>
     </div>
+    
+    <div id="paused-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <p class="text-white text-3xl font-bold animate-pulse">게임이 일시정지되었습니다.</p>
+    </div>
+
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
@@ -74,58 +76,69 @@
         const teamNameDisplay = document.getElementById('team-name-display');
         const targetBtns = document.querySelectorAll('.target-btn');
         const roundMessageEl = document.getElementById('round-message');
+        const pausedOverlay = document.getElementById('paused-overlay');
 
-        let myTeamId = null;
+        let playerDataCache = null;
         let gameDataCache = null;
+        let actionCooldown = false;
 
-        function updateTeamName() {
-            if (gameDataCache && gameDataCache.mode === 'team' && myTeamId && gameDataCache.teams) {
-                teamNameDisplay.textContent = `소속: ${gameDataCache.teams[myTeamId].name}`;
+        function updateUI() {
+            if (playerDataCache) {
+                playerNameEl.textContent = playerDataCache.name;
+                playerScoreEl.textContent = playerDataCache.score;
+            }
+
+            if (gameDataCache && playerDataCache && gameDataCache.mode === 'team' && playerDataCache.team && gameDataCache.teams) {
+                teamNameDisplay.textContent = `소속: ${gameDataCache.teams[playerDataCache.team].name}`;
             } else {
                 teamNameDisplay.textContent = '';
             }
         }
 
+
         onSnapshot(gameRef, (doc) => {
             gameDataCache = doc.data();
+            
+            pausedOverlay.classList.toggle('hidden', !gameDataCache.paused);
+
             if (gameDataCache.state === "playing") {
                 controllerUI.classList.remove('hidden');
                 waitingScreen.classList.add('hidden');
                 roundMessageEl.textContent = `문제 ${gameDataCache.currentRound}`;
-                updateTeamName();
             } else if (gameDataCache.state === "finished") {
                 controllerUI.classList.add('hidden');
                 waitingScreen.classList.remove('hidden');
                 waitingScreen.innerHTML = `<p class="text-2xl text-gray-700">게임 종료! 메인 화면에서 순위를 확인하세요.</p>`
             }
+            updateUI();
         });
 
         onSnapshot(playerRef, (doc) => {
-            const playerData = doc.data();
-            if(playerData) {
-                playerNameEl.textContent = playerData.name;
-                playerScoreEl.textContent = playerData.score;
-                myTeamId = playerData.team;
-                updateTeamName();
+            playerDataCache = doc.data();
+            if(playerDataCache) {
+                updateUI();
             }
         });
 
         async function sendAction(type, payload = {}) {
+             if (actionCooldown) return;
+             actionCooldown = true;
+             
              await addDoc(collection(db, "games", gameId, "actions"), {
                 playerId,
                 type,
                 payload,
                 timestamp: serverTimestamp()
             });
+
+            setTimeout(() => {
+                actionCooldown = false;
+            }, 1000); // 1초 쿨다운
         }
         
         targetBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 sendAction('shoot', { target: btn.dataset.target });
-                targetBtns.forEach(b => b.disabled = true);
-                setTimeout(() => {
-                    targetBtns.forEach(b => b.disabled = false);
-                }, 1000); 
             });
         });
         

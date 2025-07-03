@@ -1,6 +1,3 @@
-<!-- ======================================================================= -->
-<!-- =======================   index.html (진행자 화면)   ======================= -->
-<!-- ======================================================================= -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -14,7 +11,7 @@
     <style>
         body { font-family: 'Gowun Dodum', sans-serif; background-color: #f0f9ff; }
         canvas { background: linear-gradient(to bottom, #38bdf8, #e0f2fe); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .category-btn.selected, .mode-btn.selected, .theme-btn.selected { background-color: #0ea5e9; color: white; }
+        .category-btn.selected, .mode-btn.selected, .assign-btn.selected, .theme-btn.selected { background-color: #0ea5e9; color: white; }
         .player-item { cursor: pointer; transition: background-color 0.2s; }
         .player-item:hover { background-color: #dbeafe; }
     </style>
@@ -22,7 +19,6 @@
 <body class="flex items-center justify-center min-h-screen">
 
     <div id="game-container" class="w-full max-w-5xl mx-auto p-4 text-center">
-        <!-- 대기 화면 -->
         <div id="lobby-screen">
             <h1 class="text-4xl font-bold text-sky-700 mb-4">말씀의 빛: 그룹 대전</h1>
             <p class="text-xl text-gray-600 mb-6">스마트폰으로 QR 코드를 스캔하여 게임에 참여하세요!</p>
@@ -75,14 +71,12 @@
 
             <div class="flex flex-col md:flex-row items-center justify-center gap-8">
                 <div id="qrcode" class="p-4 bg-white rounded-lg shadow-md"></div>
-                <!-- 참가자 목록 -->
                 <div id="player-list-container" class="w-full max-w-md">
                     <h2 class="text-2xl font-bold mb-3">참가자 목록 (<span id="player-count">0</span>명)</h2>
                     <ul id="player-list" class="text-left text-lg space-y-1 h-48 overflow-y-auto p-2 bg-gray-100 rounded-lg">
                         <li class="text-gray-500 p-2">아직 참가자가 없습니다...</li>
                     </ul>
                 </div>
-                <!-- 팀 목록 -->
                 <div id="team-display" class="hidden w-full max-w-md grid-cols-2 gap-4">
                     <div>
                         <h2 id="team-a-name" class="text-2xl font-bold mb-3 text-blue-600"></h2>
@@ -109,7 +103,6 @@
             </div>
         </div>
 
-        <!-- 게임 화면 -->
         <div id="game-screen" class="hidden">
             <div id="game-ui" class="mb-2 p-3 bg-white/60 backdrop-blur-sm rounded-lg shadow-md">
                 <div class="flex justify-between items-center text-gray-700">
@@ -135,7 +128,6 @@
             <div id="scoreboard" class="mt-2 flex flex-wrap justify-center gap-4"></div>
         </div>
         
-        <!-- 결과 화면 -->
         <div id="result-screen" class="hidden">
             <h1 id="result-title" class="text-5xl font-bold text-amber-500 mb-8">🎉 최종 결과 🎉</h1>
             <div id="final-ranking" class="space-y-4 max-w-md mx-auto">
@@ -228,7 +220,7 @@
 
         const teamNameThemes = {
             animals: ["🦁 사자", "🐯 호랑이", "🐻 곰", "🦊 여우", "🦅 독수리", "🦄 유니콘", "🐉 용", "🐘 코끼리", "🐬 돌고래", "🦈 상어"],
-            bible: ["베드로", "야고보", "요한", "바울", "드보라", "한나", "모세", "아브라함", "마리아", "다윗", "라헬", "리브가", "룻"]
+            bible: ["🔑 베드로", "📜 야고보", "🕊️ 요한", "⚔️ 바울", "🌴 드보라", "🙏 한나", "⚕️ 모세", "⭐ 아브라함", "💖 마리아", "👑 다윗", "🐑 라헬", "🏺 리브가", "🌾 룻"]
         };
         
         class PlayerCharacter {
@@ -391,14 +383,14 @@
                 teamB: { name: nameTheme[teamBIndex], score: 0 }
             };
 
-            const gameRef = await addDoc(collection(db, "games"), {
+            const gameDocRef = await addDoc(collection(db, "games"), {
                 state: "lobby",
                 createdAt: serverTimestamp(),
                 mode: gameMode,
                 assignMode: assignMode,
                 teams: teams
             });
-            gameId = gameRef.id;
+            gameId = gameDocRef.id;
             gameIdDisplay.textContent = gameId;
             const joinUrl = `${window.location.origin}/join.html?gameId=${gameId}`;
             pcJoinUrlInput.value = joinUrl;
@@ -407,11 +399,12 @@
             qr.addData(joinUrl);
             qr.make();
             qrcodeContainer.innerHTML = qr.createImgTag(6);
-            const playersRef = collection(db, "games", gameId, "players");
             
-            playersUnsubscribe = onSnapshot(playersRef, (snapshot) => {
+            const playersQuery = query(collection(db, "games", gameId, "players"));
+            
+            playersUnsubscribe = onSnapshot(playersQuery, (snapshot) => {
                 const currentPlayersInDB = {};
-                snapshot.forEach(doc => {
+                 snapshot.forEach(doc => {
                     currentPlayersInDB[doc.id] = doc.data();
                 });
 
@@ -427,28 +420,26 @@
                         }
                     }
                 });
-
+                
                 players = {};
-                for (const id in currentPlayersInDB) {
+                 for (const id in currentPlayersInDB) {
                     players[id] = { ...currentPlayersInDB[id], character: null };
                 }
-                
+
                 updatePlayerListUI();
                 if (gameMode === 'personal') {
                     updateScoreboard(players);
                 }
                 
-                if (Object.keys(players).length > 0) {
-                    startGameButton.disabled = false;
-                } else {
-                    startGameButton.disabled = true;
-                }
+                startGameButton.disabled = Object.keys(players).length === 0;
             });
 
             onSnapshot(doc(db, "games", gameId), (docSnap) => {
                 if (docSnap.exists() && docSnap.data().teams) {
                     teams = docSnap.data().teams;
-                    if (gameMode === 'team') {
+                     if (gameMode === 'team') {
+                        teamANameEl.textContent = teams.teamA.name;
+                        teamBNameEl.textContent = teams.teamB.name;
                         updateTeamScoreboard();
                     }
                 }
@@ -539,6 +530,9 @@
                         if (!playerDoc.exists() || !gameDoc.exists()) {
                             throw "Document does not exist!";
                         }
+                        
+                        // Prevent multiple hits in the same round
+                        if (!roundActive) return;
 
                         const currentScore = playerDoc.data().score || 0;
                         const currentTeam = playerDoc.data().team;
@@ -557,9 +551,12 @@
                             for(let i = 0; i < 30; i++) {
                                 particles.push(new Particle(targetEnemy.x + targetEnemy.width/2, targetEnemy.y + targetEnemy.height/2, '255, 215, 0'));
                             }
+                            enemies = []; // Clear enemies immediately
                             setTimeout(() => { nextRound(); }, 2000);
                         } else {
                             playIncorrectSound();
+                            // Incorrect answers might not affect score, or you can add a penalty
+                            // transaction.update(playerDocRef, { score: currentScore + difficultySettings.penalty });
                             if (gameMode === 'team' && currentTeam) {
                                 const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.penalty;
                                 transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
@@ -593,8 +590,8 @@
                 state: "playing",
                 settings: { categories: selectedCategories, rounds: totalRounds, time: totalGameTime }
             });
-            let currentRound = 0;
-            nextRound(currentRound);
+            
+            nextRound();
             startTotalGameTimer();
             animate();
         }
@@ -606,12 +603,12 @@
                 return;
             }
             currentRound++;
-            roundActive = true;
-            playRoundStartSound();
+            
             enemies = [];
             particles = [];
             beams = [];
             roundCounterEl.textContent = `${currentRound} / ${totalRounds}`;
+            
             let filteredVerses = versesData;
             if (!selectedCategories.includes('전체')) {
                 filteredVerses = versesData.filter(v => v.카테고리 && selectedCategories.includes(v.카테고리));
@@ -660,6 +657,9 @@
                 currentRound,
                 question: questionPayload,
             });
+
+            roundActive = true;
+            playRoundStartSound();
         }
         
         function startTotalGameTimer() {
@@ -679,7 +679,15 @@
         function animate() {
             if (gameScreen.classList.contains('hidden')) return;
             requestAnimationFrame(animate);
-            if (isGamePaused) return;
+            if (isGamePaused) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 48px Gowun Dodum';
+                ctx.textAlign = 'center';
+                ctx.fillText('일시정지됨', canvas.width / 2, canvas.height / 2);
+                return;
+            }
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             for (const id in players) {
@@ -697,15 +705,14 @@
                 setTimeout(() => nextRound(), 1500);
             }
             beams.forEach((b, i) => {
-                if (b.life <= 0) {
-                    beams.splice(i, 1);
-                } else {
-                    b.update();
-                }
+                b.update();
+                if (b.life <= 0) beams.splice(i, 1);
             });
+            beams.forEach(b => b.draw());
+
             particles.forEach((p, i) => {
+                p.update();
                 if (p.life <= 0) particles.splice(i, 1);
-                else p.update();
             });
         }
 
@@ -719,26 +726,42 @@
             await updateDoc(doc(db, "games", gameId), { state: "finished" });
 
             if (gameMode === 'team') {
-                const winnerTeamId = teams.teamA.score > teams.teamB.score ? 'teamA' : 'teamB';
-                const winnerTeam = teams[winnerTeamId];
-                const loserTeam = teams[winnerTeamId === 'teamA' ? 'teamB' : 'teamA'];
+                const winnerTeamId = teams.teamA.score > teams.teamB.score ? 'teamA' : (teams.teamB.score > teams.teamA.score ? 'teamB' : null);
                 
-                const winningPlayers = Object.values(players).filter(p => p.team === winnerTeamId);
-                const mvp = winningPlayers.sort((a, b) => b.score - a.score)[0];
+                if (winnerTeamId) {
+                    const winnerTeam = teams[winnerTeamId];
+                    const loserTeam = teams[winnerTeamId === 'teamA' ? 'teamB' : 'teamA'];
+                    
+                    const winningPlayers = Object.values(players).filter(p => p.team === winnerTeamId);
+                    const mvp = winningPlayers.length > 0 ? winningPlayers.sort((a, b) => b.score - a.score)[0] : null;
 
-                resultTitle.textContent = `🎉 ${winnerTeam.name} 팀 승리! 🎉`;
-                finalRanking.innerHTML = `
-                    <div class="p-6 bg-green-100 border-2 border-green-500 rounded-lg shadow-lg">
-                        <h3 class="text-3xl font-bold text-green-700">${winnerTeam.name}</h3>
-                        <p class="text-4xl">${winnerTeam.score}점</p>
-                        ${mvp ? `<p class="mt-2 text-lg">👑 최고 기여자: ${mvp.name} (${mvp.score}점)</p>` : ''}
-                    </div>
-                    <div class="p-4 bg-red-100 rounded-lg">
-                        <h3 class="text-2xl font-bold text-red-700">${loserTeam.name}</h3>
-                        <p class="text-3xl">${loserTeam.score}점</p>
-                    </div>
-                `;
+                    resultTitle.textContent = `🎉 ${winnerTeam.name} 팀 승리! 🎉`;
+                    finalRanking.innerHTML = `
+                        <div class="p-6 bg-green-100 border-2 border-green-500 rounded-lg shadow-lg">
+                            <h3 class="text-3xl font-bold text-green-700">${winnerTeam.name}</h3>
+                            <p class="text-4xl">${winnerTeam.score}점</p>
+                            ${mvp ? `<p class="mt-2 text-lg">👑 최고 기여자: ${mvp.name} (${mvp.score}점)</p>` : ''}
+                        </div>
+                        <div class="p-4 bg-gray-100 rounded-lg">
+                            <h3 class="text-2xl font-bold text-gray-700">${loserTeam.name}</h3>
+                            <p class="text-3xl">${loserTeam.score}점</p>
+                        </div>
+                    `;
+                } else {
+                     resultTitle.textContent = `무승부!`;
+                     finalRanking.innerHTML = `
+                        <div class="p-6 bg-blue-100 border-2 border-blue-500 rounded-lg shadow-lg">
+                            <h3 class="text-3xl font-bold text-blue-700">${teams.teamA.name}</h3>
+                            <p class="text-4xl">${teams.teamA.score}점</p>
+                        </div>
+                        <div class="p-6 bg-red-100 border-2 border-red-500 rounded-lg shadow-lg">
+                            <h3 class="text-3xl font-bold text-red-700">${teams.teamB.name}</h3>
+                            <p class="text-4xl">${teams.teamB.score}점</p>
+                        </div>
+                     `;
+                }
             } else {
+                resultTitle.textContent = '🎉 최종 결과 🎉';
                 const sortedPlayers = Object.values(players).sort((a,b) => b.score - a.score);
                 finalRanking.innerHTML = '';
                 sortedPlayers.forEach((p, index) => {
@@ -757,72 +780,77 @@
             for (const p of particlesAndEndings) {
                 if (word.endsWith(p)) return false;
             }
-            return true;
+            return !/\W/.test(word);
         }
 
         function generateDistractors(correctWord, allVerses) {
             const candidatePool = allVerses.flatMap(v => v.본문.split(' '))
-                                         .filter(w => isValidBlankWord(w) && w !== correctWord);
+                                         .filter(w => isValidBlankWord(w) && w.length > 1 && w !== correctWord);
             
             const distractors = new Set();
             while (distractors.size < 2 && candidatePool.length > 0) {
                 const randomIndex = Math.floor(Math.random() * candidatePool.length);
-                distractors.add(candidatePool[randomIndex]);
+                distractors.add(candidatePool.splice(randomIndex, 1)[0]);
             }
             return Array.from(distractors);
         }
 
-        gameModeSelector.addEventListener('click', (e) => {
-            if (e.target.tagName === 'BUTTON') {
-                gameMode = e.target.dataset.mode;
-                gameModeSelector.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('selected'));
-                e.target.classList.add('selected');
+        gameModeSelector.addEventListener('click', async (e) => {
+            if (e.target.tagName !== 'BUTTON') return;
+            
+            gameMode = e.target.dataset.mode;
+            gameModeSelector.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('selected'));
+            e.target.classList.add('selected');
 
-                if (gameMode === 'team') {
-                    playerListContainer.classList.add('hidden');
-                    teamDisplay.classList.add('grid');
-                    teamDisplay.classList.remove('hidden');
-                    teamSettingsContainer.classList.remove('hidden');
-                    teamANameEl.textContent = teams.teamA.name;
-                    teamBNameEl.textContent = teams.teamB.name;
-                } else {
-                    playerListContainer.classList.remove('hidden');
-                    teamDisplay.classList.add('hidden');
-                    teamDisplay.classList.remove('grid');
-                    teamSettingsContainer.classList.add('hidden');
-                }
-                updatePlayerListUI();
+            if (gameId) {
+                await updateDoc(doc(db, "games", gameId), { mode: gameMode });
             }
+
+            if (gameMode === 'team') {
+                playerListContainer.classList.add('hidden');
+                teamDisplay.style.display = 'grid'; // Use style for grid display
+                teamDisplay.classList.remove('hidden');
+                teamSettingsContainer.classList.remove('hidden');
+                teamANameEl.textContent = teams.teamA?.name || '팀 A';
+                teamBNameEl.textContent = teams.teamB?.name || '팀 B';
+            } else {
+                playerListContainer.classList.remove('hidden');
+                teamDisplay.style.display = 'none';
+                teamDisplay.classList.add('hidden');
+                teamSettingsContainer.classList.add('hidden');
+            }
+            updatePlayerListUI();
         });
 
         teamThemeSelector.addEventListener('click', async (e) => {
-            if (e.target.tagName === 'BUTTON') {
-                teamTheme = e.target.dataset.theme;
-                teamThemeSelector.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('selected'));
-                e.target.classList.add('selected');
-                
-                const nameTheme = teamNameThemes[teamTheme];
-                const teamAIndex = Math.floor(Math.random() * nameTheme.length);
-                let teamBIndex;
-                do {
-                    teamBIndex = Math.floor(Math.random() * nameTheme.length);
-                } while (teamAIndex === teamBIndex);
-                
-                teams = {
-                    teamA: { name: nameTheme[teamAIndex], score: 0 },
-                    teamB: { name: nameTheme[teamBIndex], score: 0 }
-                };
-                teamANameEl.textContent = teams.teamA.name;
-                teamBNameEl.textContent = teams.teamB.name;
+            if (e.target.tagName !== 'BUTTON') return;
+            teamTheme = e.target.dataset.theme;
+            teamThemeSelector.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('selected'));
+            e.target.classList.add('selected');
+            
+            const nameTheme = teamNameThemes[teamTheme];
+            const teamAIndex = Math.floor(Math.random() * nameTheme.length);
+            let teamBIndex;
+            do {
+                teamBIndex = Math.floor(Math.random() * nameTheme.length);
+            } while (teamAIndex === teamBIndex);
+            
+            teams.teamA.name = nameTheme[teamAIndex];
+            teams.teamB.name = nameTheme[teamBIndex];
+            
+            teamANameEl.textContent = teams.teamA.name;
+            teamBNameEl.textContent = teams.teamB.name;
+            if (gameId) {
                 await updateDoc(doc(db, "games", gameId), { teams: teams });
             }
         });
 
         teamAssignSelector.addEventListener('click', async (e) => {
-            if (e.target.tagName === 'BUTTON') {
-                assignMode = e.target.dataset.assign;
-                teamAssignSelector.querySelectorAll('.assign-btn').forEach(btn => btn.classList.remove('selected'));
-                e.target.classList.add('selected');
+            if (e.target.tagName !== 'BUTTON') return;
+            assignMode = e.target.dataset.assign;
+            teamAssignSelector.querySelectorAll('.assign-btn').forEach(btn => btn.classList.remove('selected'));
+            e.target.classList.add('selected');
+            if (gameId) {
                 await updateDoc(doc(db, "games", gameId), { assignMode: assignMode });
             }
         });
@@ -844,6 +872,7 @@
             pauseGameBtn.textContent = isGamePaused ? '계속' : '일시정지';
             pauseGameBtn.classList.toggle('bg-yellow-500');
             pauseGameBtn.classList.toggle('bg-green-500');
+            if(gameId) updateDoc(doc(db,"games", gameId), { paused: isGamePaused });
         });
         forceEndGameBtn.addEventListener('click', endGame);
 
