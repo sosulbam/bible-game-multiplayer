@@ -25,18 +25,14 @@
             <h1 class="text-4xl font-bold text-sky-700 mb-4">말씀의 빛: 그룹 대전</h1>
             <p class="text-xl text-gray-600 mb-6">스마트폰으로 QR 코드를 스캔하여 게임에 참여하세요!</p>
             
-            <!-- 게임 설정 -->
             <div class="max-w-3xl mx-auto bg-white/70 p-4 rounded-lg shadow-md mb-6">
                 <h3 class="text-xl font-bold text-gray-700 mb-3">게임 설정</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                    <!-- 카테고리 선택 -->
                     <div>
                         <label class="font-bold">카테고리 선택 (다중 선택 가능):</label>
                         <div id="category-selector" class="mt-2 flex flex-wrap gap-2 p-2 bg-gray-100 rounded-md max-h-32 overflow-y-auto">
-                            <!-- 카테고리 버튼이 여기에 동적으로 추가됩니다 -->
                         </div>
                     </div>
-                    <!-- 문제 수 및 시간 제한 -->
                     <div class="space-y-3">
                         <div>
                             <label for="rounds-input" class="font-bold">문제 수:</label>
@@ -161,7 +157,6 @@
         let roundActive = false;
         let synth;
 
-        // 게임 설정 변수
         let selectedCategories = [];
         let totalRounds = 10;
         let roundTimeLimit = 30;
@@ -223,13 +218,24 @@
                 this.speed = (Math.random() * 0.5 + 0.8) * difficultySettings.speed;
                 this.word = word; this.isCorrect = isCorrect;
                 this.number = number;
-                ctx.font = '18px Gowun Dodum';
-                this.width = ctx.measureText(this.word).width + 30;
-                this.height = 45;
+                this.width = ctx.measureText(this.word).width + 40;
+                this.height = 50;
+
+                const monsterSVG = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="${this.width}" height="${this.height}">
+                        <path d="M5,45 C5,20 45,20 45,45 Q40,40 35,45 C30,40 20,40 15,45 Q10,40 5,45 Z" fill="#4A5568"/>
+                        <circle cx="18" cy="25" r="4" fill="white">
+                            <animate attributeName="cy" values="25;22;25" dur="1s" repeatCount="indefinite" />
+                        </circle>
+                        <circle cx="32" cy="25" r="4" fill="white">
+                            <animate attributeName="cy" values="25;22;25" dur="1s" repeatCount="indefinite" />
+                        </circle>
+                    </svg>`;
+                this.image = new Image();
+                this.image.src = `data:image/svg+xml;base64,${btoa(monsterSVG)}`;
             }
             draw() {
-                ctx.fillStyle = '#5A5A5A';
-                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
                 ctx.fillStyle = '#FFF';
                 ctx.font = '18px Gowun Dodum';
                 ctx.textAlign = 'center';
@@ -238,7 +244,10 @@
                 
                 ctx.font = 'bold 22px Arial';
                 ctx.fillStyle = 'yellow';
-                ctx.fillText(this.number, this.x + this.width / 2, this.y - 15);
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.strokeText(this.number, this.x + this.width / 2, this.y - 10);
+                ctx.fillText(this.number, this.x + this.width / 2, this.y - 10);
             }
             update() { this.y += this.speed; this.draw(); }
         }
@@ -271,24 +280,17 @@
                 this.y = y;
                 this.color = color;
                 this.width = 10;
-                this.height = 30;
-                this.speed = 15;
+                this.height = y; // 빔 길이를 캔버스 상단까지로 설정
             }
             draw() {
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.moveTo(this.x, this.y);
-                ctx.lineTo(this.x - this.width/2, this.y - this.height);
-                ctx.lineTo(this.x + this.width/2, this.y - this.height);
-                ctx.closePath();
-                ctx.shadowColor = this.color;
-                ctx.shadowBlur = 15;
-                ctx.fill();
-                ctx.shadowBlur = 0;
+                const gradient = ctx.createLinearGradient(this.x, this.y, this.x, 0);
+                gradient.addColorStop(0, this.color);
+                gradient.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(this.x - this.width / 2, 0, this.width, this.y);
             }
             update() {
-                this.y -= this.speed;
-                this.draw();
+                // 빔은 발사 즉시 그려지고 사라짐
             }
         }
         
@@ -398,6 +400,7 @@
             if (targetEnemy) {
                 const player = players[playerId];
                 if (player && player.character) {
+                    player.character.x = targetEnemy.x + (targetEnemy.width / 2) - (player.character.width / 2);
                     player.character.shoot();
                 }
 
@@ -424,7 +427,6 @@
         }
 
         async function startGame() {
-            // 게임 설정값 가져오기
             selectedCategories = [...categorySelector.querySelectorAll('.selected')].map(btn => btn.dataset.category);
             totalRounds = parseInt(roundsInput.value) || 10;
             roundTimeLimit = parseInt(timeLimitInput.value) || 30;
@@ -534,8 +536,10 @@
                 timerEl.textContent = timeLeft;
                 if (timeLeft <= 0) {
                     clearInterval(roundTimerId);
-                    roundActive = false;
-                    setTimeout(() => nextRound(), 2000); // 시간 초과 시 2초 후 다음 라운드
+                    if (roundActive) {
+                        roundActive = false;
+                        setTimeout(() => nextRound(), 2000);
+                    }
                 }
             }, 1000);
         }
@@ -550,8 +554,12 @@
             }
             enemies.forEach(e => e.update());
             beams.forEach((b, i) => {
-                if (b.y < -b.height) beams.splice(i, 1);
-                else b.update();
+                b.height -= b.speed;
+                if (b.height <= 0) {
+                    beams.splice(i, 1);
+                } else {
+                    b.draw();
+                }
             });
             particles.forEach((p, i) => {
                 if (p.life <= 0) particles.splice(i, 1);
@@ -571,7 +579,7 @@
             finalRanking.innerHTML = '';
             sortedPlayers.forEach((p, index) => {
                 const div = document.createElement('div');
-                const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
+                const rankEmoji = ['🥇', '🥈', '�'][index] || `${index + 1}위`;
                 div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
                 div.innerHTML = `
                     <span class="font-bold">${rankEmoji} ${p.name}</span>
@@ -599,7 +607,6 @@
                 if (!response.ok) throw new Error('verses.json을 불러올 수 없습니다.');
                 versesData = await response.json();
                 
-                // 카테고리 선택 UI 생성
                 const categories = ['전체', ...new Set(versesData.map(v => v.카테고리).filter(Boolean))];
                 categorySelector.innerHTML = '';
                 categories.forEach(cat => {
@@ -612,7 +619,6 @@
                     }
                     btn.addEventListener('click', () => {
                         btn.classList.toggle('selected');
-                        // '전체'를 선택하면 다른 것들은 해제, 다른 것을 선택하면 '전체'는 해제
                         if (btn.dataset.category === '전체' && btn.classList.contains('selected')) {
                             categorySelector.querySelectorAll('.category-btn').forEach(b => {
                                 if (b !== btn) b.classList.remove('selected');
