@@ -24,24 +24,25 @@
         .mole-hole::before { content: ''; position: absolute; top: 20%; left: 50%; transform: translateX(-50%); width: 80%; height: 40%; background: #5c3d2e; border-radius: 50%; }
         .mole { position: absolute; bottom: -100%; left: 50%; transform: translateX(-50%); width: 70%; transition: bottom 0.2s ease-out; cursor: pointer; }
         
-        /* ## UPDATE: 두더지 글자가 잘 보이도록 수정 ## */
-        .mole.up { bottom: 40%; } /* 두더지가 더 높이 올라오도록 수정 */
+        /* ## UPDATE: 두더지와 글자가 함께 잘 보이도록 수정 ## */
+        .mole.up { bottom: 30%; } /* 두더지가 충분히 올라오도록 높이 조정 */
         .mole svg { width: 100%; display: block; }
         .mole .word-plate { 
             position: absolute; 
-            bottom: 5px; /* 두더지 아래쪽에 글자판 위치 */
+            top: 100%; /* 두더지 이미지 바로 아래에 위치하도록 설정 */
             left: 50%; 
             transform: translateX(-50%); 
+            margin-top: 8px; /* 두더지와 글자판 사이 간격 */
             background: white; 
             border: 4px solid #663300; 
             border-radius: 10px; 
             padding: 5px 15px; 
-            font-size: 2rem; /* 폰트 크기 약간 조정 */
+            font-size: 2rem;
             font-weight: bold; 
             white-space: nowrap; 
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            width: max-content; /* 글자 길이에 맞게 너비 조정 */
-            max-width: 150%; /* 구멍보다 너무 커지지 않도록 */
+            width: max-content;
+            max-width: 150%;
         }
         .hit-effect { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 4rem; opacity: 0; animation: fade-out 0.5s; pointer-events: none; }
         @keyframes fade-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -70%) scale(1.2); } }
@@ -1109,7 +1110,7 @@
                      `;
                 }
             } else {
-                resultTitle.textContent = '🎉 최종 결과 �';
+                resultTitle.textContent = '🎉 최종 결과 🎉';
                 const sortedPlayers = Object.values(players).sort((a,b) => b.score - a.score);
                 finalRanking.innerHTML = '';
                 sortedPlayers.forEach((p, index) => {
