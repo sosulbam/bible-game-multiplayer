@@ -26,13 +26,17 @@
         
         /* ## UPDATE: 두더지와 글자가 함께 잘 보이도록 수정 ## */
         .mole.up { bottom: 30%; } /* 두더지가 충분히 올라오도록 높이 조정 */
-        .mole svg { width: 100%; display: block; }
+        .mole svg { 
+            width: 100%; 
+            display: block;
+            position: relative; /* z-index를 적용하기 위해 필요 */
+            z-index: 1; /* 두더지 이미지가 글자판 뒤에 오도록 설정 */
+        }
         .mole .word-plate { 
             position: absolute; 
-            top: 100%; /* 두더지 이미지 바로 아래에 위치하도록 설정 */
+            bottom: 15%; /* 두더지 입 근처에 위치하도록 조정 */
             left: 50%; 
             transform: translateX(-50%); 
-            margin-top: 8px; /* 두더지와 글자판 사이 간격 */
             background: white; 
             border: 4px solid #663300; 
             border-radius: 10px; 
@@ -43,6 +47,7 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             width: max-content;
             max-width: 150%;
+            z-index: 2; /* 글자판이 두더지 이미지 위에 오도록 설정 */
         }
         .hit-effect { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 4rem; opacity: 0; animation: fade-out 0.5s; pointer-events: none; }
         @keyframes fade-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -70%) scale(1.2); } }
@@ -1110,7 +1115,7 @@
                      `;
                 }
             } else {
-                resultTitle.textContent = '🎉 최종 결과 🎉';
+                resultTitle.textContent = '🎉 최종 결과 �';
                 const sortedPlayers = Object.values(players).sort((a,b) => b.score - a.score);
                 finalRanking.innerHTML = '';
                 sortedPlayers.forEach((p, index) => {
