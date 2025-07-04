@@ -34,7 +34,7 @@
         }
         .mole .word-plate { 
             position: absolute; 
-            bottom: 15%; /* 두더지 입 근처에 위치하도록 조정 */
+            bottom: 5%; /* 글자판 위치를 낮추어 두더지 얼굴이 보이도록 조정 */
             left: 50%; 
             transform: translateX(-50%); 
             background: white; 
@@ -1087,7 +1087,7 @@
                     const winningPlayers = Object.values(players).filter(p => p.team === winnerTeamId);
                     const mvp = winningPlayers.length > 0 ? winningPlayers.sort((a, b) => b.score - a.score)[0] : null;
 
-                    resultTitle.textContent = `🎉 ${winnerTeam.name} 팀 승리! 🎉`;
+                    resultTitle.textContent = `🎉 ${winnerTeam.name} 팀 승리! �`;
                     finalRanking.innerHTML = `
                         <div class="p-6 bg-green-100 border-2 border-green-500 rounded-lg shadow-lg">
                             <h3 class="text-3xl font-bold text-green-700">${winnerTeam.name}</h3>
@@ -1115,7 +1115,7 @@
                      `;
                 }
             } else {
-                resultTitle.textContent = '🎉 최종 결과 �';
+                resultTitle.textContent = '🎉 최종 결과 🎉';
                 const sortedPlayers = Object.values(players).sort((a,b) => b.score - a.score);
                 finalRanking.innerHTML = '';
                 sortedPlayers.forEach((p, index) => {
