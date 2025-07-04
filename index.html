@@ -157,8 +157,9 @@
                     </div>
                 </div>
                 <div id="question-box" class="flex-grow text-center">
-                    <p id="question-verse" class="text-lg font-bold text-sky-800"></p>
-                    <p id="question-text" class="text-2xl text-gray-900 mt-1"></p>
+                    <!-- ## UI UPDATE: 장절 텍스트 크기 및 스타일 변경 ## -->
+                    <p id="question-verse" class="text-4xl font-bold text-sky-800 mb-1"></p>
+                    <p id="question-text" class="text-xl text-gray-700"></p>
                 </div>
                 <div class="flex-none flex items-center gap-2">
                     <button id="sound-toggle-btn" class="p-2 rounded-full hover:bg-gray-200 transition">
@@ -924,9 +925,18 @@
 
                 const availableMoles = moles.filter(m => !m.isUp);
                 if (availableMoles.length === 0) return;
+                
+                // ## 난이도 조절 로직 ##
+                let molesToPop = 1;
+                if (currentRound > 7) {
+                    molesToPop = 3;
+                } else if (currentRound > 3) {
+                    molesToPop = 2;
+                }
+                
+                const finalMolesToPop = Math.min(molesToPop, availableMoles.length);
 
-                const molesToPop = Math.min(3, availableMoles.length);
-                for (let i = 0; i < molesToPop; i++) {
+                for (let i = 0; i < finalMolesToPop; i++) {
                     const moleIndex = Math.floor(Math.random() * availableMoles.length);
                     const mole = availableMoles.splice(moleIndex, 1)[0];
                     if (mole) {
@@ -946,7 +956,8 @@
                 
                 const moleEl = document.createElement('div');
                 moleEl.className = 'mole';
-                moleEl.innerHTML = `<div class="word-plate"></div><img src="https://i.imgur.com/C10nU6V.png" alt="두더지">`;
+                // ## 이미지 링크 수정 ##
+                moleEl.innerHTML = `<div class="word-plate"></div><img src="https://i.postimg.cc/R01t0x1j/mole.png" alt="두더지">`;
                 hole.appendChild(moleEl);
                 moleGrid.appendChild(hole);
 
