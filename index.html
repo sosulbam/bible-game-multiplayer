@@ -23,9 +23,9 @@
         .mole-hole { background-color: #a16f5a; border-radius: 50%; border-bottom: 10px solid #78523f; position: relative; overflow: hidden; }
         .mole-hole::before { content: ''; position: absolute; top: 20%; left: 50%; transform: translateX(-50%); width: 80%; height: 40%; background: #5c3d2e; border-radius: 50%; }
         .mole { position: absolute; bottom: -100%; left: 50%; transform: translateX(-50%); width: 70%; transition: bottom 0.2s ease-out; cursor: pointer; }
-        .mole.up { bottom: 10%; }
-        .mole img { width: 100%; display: block; }
-        /* ## UPDATE: 글자 크기 및 위치 조정 ## */
+        /* ## UPDATE: 두더지가 더 높이 올라오도록 수정 ## */
+        .mole.up { bottom: 25%; }
+        .mole svg { width: 100%; display: block; }
         .mole .word-plate { 
             position: absolute; 
             bottom: 100%; 
@@ -35,7 +35,7 @@
             border: 4px solid #663300; 
             border-radius: 10px; 
             padding: 5px 15px; 
-            font-size: 2.5rem; /* 글자 크기 대폭 증가 */
+            font-size: 2.5rem;
             font-weight: bold; 
             white-space: nowrap; 
             box-shadow: 0 4px 6px rgba(0,0,0,0.2); 
@@ -968,7 +968,9 @@
                 
                 const moleEl = document.createElement('div');
                 moleEl.className = 'mole';
-                moleEl.innerHTML = `<div class="word-plate"></div><img src="https://i.postimg.cc/pT6pS5yP/mole.png" alt="두더지">`;
+                // ## UPDATE: SVG 이미지를 직접 삽입하여 링크 문제 해결 ##
+                const moleSVG = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g><ellipse ry="22" rx="28" cy="60" cx="50" fill="#795548"/><ellipse ry="3.5" rx="5" cy="50" cx="38" fill="#000000"/><ellipse ry="3.5" rx="5" cy="50" cx="62" fill="#000000"/><ellipse ry="6" rx="9" cy="58" cx="50" fill="#d3a089"/><path d="M 45,62 A 5 5 0 0 1 55 62" stroke="#000" fill="none" stroke-width="1.5"/></g></svg>`;
+                moleEl.innerHTML = `<div class="word-plate"></div>${moleSVG}`;
                 hole.appendChild(moleEl);
                 moleGrid.appendChild(hole);
 
