@@ -14,9 +14,10 @@
     <style>
         body { font-family: 'Gowun Dodum', sans-serif; background-color: #f0f9ff; }
         .game-canvas { background: linear-gradient(to bottom, #38bdf8, #e0f2fe); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .category-btn.selected, .mode-btn.selected, .gameplay-btn.selected, .assign-btn.selected, .theme-btn.selected { background-color: #0ea5e9; color: white; }
-        .player-item { cursor: pointer; transition: background-color 0.2s; }
-        .player-item:hover { background-color: #dbeafe; }
+        .category-btn.selected, .gameplay-btn.selected, .assign-btn.selected, .theme-btn.selected { background-color: #0ea5e9; color: white; }
+        .player-item { transition: background-color 0.3s, color 0.3s; }
+        .player-waiting { background-color: #f1f5f9; color: #64748b; }
+        .player-ready { background-color: #dcfce7; color: #166534; font-weight: bold; }
         
         /* 두더지 게임 스타일 */
         #mole-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%; max-width: 600px; margin: 0 auto; aspect-ratio: 1 / 1; }
@@ -24,33 +25,39 @@
         .mole-hole::before { content: ''; position: absolute; top: 20%; left: 50%; transform: translateX(-50%); width: 80%; height: 40%; background: #5c3d2e; border-radius: 50%; }
         .mole { position: absolute; bottom: -100%; left: 50%; transform: translateX(-50%); width: 70%; transition: bottom 0.2s ease-out; cursor: pointer; }
         
-        /* ## UPDATE: 두더지와 글자가 함께 잘 보이도록 수정 ## */
-        .mole.up { bottom: 30%; } /* 두더지가 충분히 올라오도록 높이 조정 */
-        .mole svg { 
-            width: 100%; 
-            display: block;
-            position: relative; /* z-index를 적용하기 위해 필요 */
-            z-index: 1; /* 두더지 이미지가 글자판 뒤에 오도록 설정 */
-        }
+        .mole.up { bottom: 30%; }
+        .mole svg { width: 100%; display: block; position: relative; z-index: 1; }
         .mole .word-plate { 
-            position: absolute; 
-            bottom: -15%; /* 글자판 위치를 낮추어 두더지 얼굴이 보이도록 조정 */
-            left: 50%; 
-            transform: translateX(-50%); 
-            background: white; 
-            border: 4px solid #663300; 
-            border-radius: 10px; 
-            padding: 5px 15px; 
-            font-size: 2rem;
-            font-weight: bold; 
-            white-space: nowrap; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            width: max-content;
-            max-width: 150%;
-            z-index: 2; /* 글자판이 두더지 이미지 위에 오도록 설정 */
+            position: absolute; bottom: -15%; left: 50%; transform: translateX(-50%); 
+            background: white; border: 4px solid #663300; border-radius: 10px; 
+            padding: 5px 15px; font-size: 2rem; font-weight: bold; 
+            white-space: nowrap; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            width: max-content; max-width: 150%; z-index: 2;
         }
         .hit-effect { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 4rem; opacity: 0; animation: fade-out 0.5s; pointer-events: none; }
         @keyframes fade-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, -70%) scale(1.2); } }
+
+        /* Modal and Overlay Styles */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white; padding: 2rem; border-radius: 1rem;
+            max-width: 90%; width: 500px; text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .countdown-text {
+            font-size: 15rem; color: white; font-weight: bold;
+            text-shadow: 0 0 20px rgba(0,0,0,0.5);
+            animation: countdown-zoom 1s infinite;
+        }
+        @keyframes countdown-zoom {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+        }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen">
@@ -68,19 +75,13 @@
                     <label class="font-bold">게임 방식:</label>
                     <div id="gameplay-mode-selector" class="inline-flex rounded-md shadow-sm" role="group">
                       <button type="button" data-gameplay="fill-in-blank" class="gameplay-btn selected py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-200 hover:bg-gray-100">말씀 채우기</button>
-                      <button type="button" data-gameplay="mole-whack" class="gameplay-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-r-md border border-gray-200 hover:bg-gray-100">두더지 잡기</button>
+                      <button type="button" data-gameplay="first-word-whack" class="gameplay-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100">첫어절 맞추기</button>
+                      <button type="button" data-gameplay="blank-whack" class="gameplay-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-r-md border border-gray-200 hover:bg-gray-100">빈칸 맞추기</button>
                     </div>
                 </div>
 
                 <div class="mb-4 flex justify-center items-center gap-6">
-                    <div>
-                        <label class="font-bold">게임 모드:</label>
-                        <div id="game-mode-selector" class="inline-flex rounded-md shadow-sm" role="group">
-                          <button type="button" data-mode="personal" class="mode-btn selected py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-200 hover:bg-gray-100">개인전</button>
-                          <button type="button" data-mode="team" class="mode-btn py-2 px-4 text-sm font-medium text-gray-900 bg-white rounded-r-md border border-gray-200 hover:bg-gray-100">팀전</button>
-                        </div>
-                    </div>
-                    <div id="team-settings-container" class="hidden flex items-center gap-6">
+                    <div id="team-settings-container" class="flex items-center gap-6">
                         <div>
                             <label class="font-bold">팀 이름 테마:</label>
                             <div id="team-theme-selector" class="inline-flex rounded-md shadow-sm" role="group">
@@ -132,27 +133,29 @@
                 </div>
             </div>
 
-            <div class="flex flex-col md:flex-row items-center justify-center gap-8">
+            <div class="flex flex-col md:flex-row items-start justify-center gap-8">
                 <div id="qrcode" class="p-4 bg-white rounded-lg shadow-md"></div>
-                <div id="player-list-container" class="w-full max-w-md">
-                    <h2 class="text-2xl font-bold mb-3">참가자 목록 (<span id="player-count">0</span>명)</h2>
-                    <ul id="player-list" class="text-left text-lg space-y-1 h-48 overflow-y-auto p-2 bg-gray-100 rounded-lg">
-                        <li class="text-gray-500 p-2">아직 참가자가 없습니다...</li>
-                    </ul>
-                </div>
-                <div id="team-display" class="hidden w-full max-w-md grid-cols-2 gap-4">
+                
+                <div id="team-display" class="w-full max-w-2xl grid grid-cols-2 gap-4">
                     <div>
                         <h2 id="team-a-name" class="text-2xl font-bold mb-3 text-blue-600"></h2>
-                        <ul id="team-a-list" class="text-left text-lg space-y-1 h-48 overflow-y-auto p-2 bg-blue-50 rounded-lg"></ul>
+                        <ul id="team-a-list" class="text-left text-lg space-y-2 p-2 bg-blue-50 rounded-lg min-h-[200px]"></ul>
                     </div>
                     <div>
                         <h2 id="team-b-name" class="text-2xl font-bold mb-3 text-red-600"></h2>
-                        <ul id="team-b-list" class="text-left text-lg space-y-1 h-48 overflow-y-auto p-2 bg-red-50 rounded-lg"></ul>
+                        <ul id="team-b-list" class="text-left text-lg space-y-2 p-2 bg-red-50 rounded-lg min-h-[200px]"></ul>
+                    </div>
+                     <div class="col-span-2">
+                        <h2 class="text-2xl font-bold mb-3">팀 미지정 (<span id="unassigned-player-count">0</span>명)</h2>
+                        <ul id="player-list" class="text-left text-lg space-y-2 p-2 bg-gray-100 rounded-lg min-h-[100px]">
+                            <li class="text-gray-500 p-2">아직 참가자가 없습니다...</li>
+                        </ul>
                     </div>
                 </div>
             </div>
             <div class="mt-8">
                 <button id="start-game-button" class="bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-full text-2xl transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>게임 시작</button>
+                 <p id="start-game-notice" class="text-red-500 mt-2 hidden">모든 참가자가 '준비 완료' 상태여야 합니다.</p>
             </div>
             <div class="mt-4 space-y-2">
                  <p class="text-gray-500">게임 ID: <span id="game-id-display"></span></p>
@@ -211,14 +214,28 @@
             <h1 id="result-title" class="text-5xl font-bold text-amber-500 mb-8">🎉 최종 결과 🎉</h1>
             <div id="final-ranking" class="space-y-4 max-w-md mx-auto">
             </div>
-            <button id="restart-button" class="mt-12 bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-full text-2xl transition shadow-lg">새 게임 시작</button>
+            <button id="return-to-lobby-btn" class="mt-12 bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-full text-2xl transition shadow-lg">대기실로 돌아가기</button>
         </div>
-
     </div>
+
+    <!-- 안내 및 카운트다운 모달 -->
+    <div id="instruction-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 id="instruction-title" class="text-3xl font-bold mb-4 text-sky-700">게임 안내</h2>
+            <div id="instruction-body" class="text-left space-y-3">
+                <!-- 내용이 여기에 동적으로 삽입됩니다. -->
+            </div>
+            <p class="mt-6 text-lg font-bold animate-pulse">잠시 후 게임이 시작됩니다...</p>
+        </div>
+    </div>
+    <div id="countdown-overlay" class="modal-overlay hidden">
+        <p id="countdown-text" class="countdown-text">3</p>
+    </div>
+
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, collection, onSnapshot, updateDoc, addDoc, query, serverTimestamp, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, collection, onSnapshot, updateDoc, addDoc, query, serverTimestamp, runTransaction, writeBatch, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // --- Firebase Initialization ---
         const firebaseConfig = {
@@ -237,8 +254,8 @@
         const gameScreen = document.getElementById('game-screen');
         const resultScreen = document.getElementById('result-screen');
         const qrcodeContainer = document.getElementById('qrcode');
-        const playerCountEl = document.getElementById('player-count');
         const startGameButton = document.getElementById('start-game-button');
+        const startGameNotice = document.getElementById('start-game-notice');
         const gameIdDisplay = document.getElementById('game-id-display');
         const pcJoinUrlContainer = document.getElementById('pc-join-url-container');
         const pcJoinUrlInput = document.getElementById('pc-join-url');
@@ -250,11 +267,11 @@
         const timerEl = document.getElementById('timer');
         const finalRanking = document.getElementById('final-ranking');
         const resultTitle = document.getElementById('result-title');
-        const restartButton = document.getElementById('restart-button');
+        const returnToLobbyBtn = document.getElementById('return-to-lobby-btn');
         const categorySelector = document.getElementById('category-selector');
         
-        const playerListContainer = document.getElementById('player-list-container');
         const playerList = document.getElementById('player-list');
+        const unassignedPlayerCountEl = document.getElementById('unassigned-player-count');
         const teamDisplay = document.getElementById('team-display');
         const teamANameEl = document.getElementById('team-a-name');
         const teamBNameEl = document.getElementById('team-b-name');
@@ -270,7 +287,6 @@
         const moleSpeedInput = document.getElementById('mole-speed-input');
         const moleTimeLimitInput = document.getElementById('mole-time-limit-input');
         
-        const gameModeSelector = document.getElementById('game-mode-selector');
         const teamSettingsContainer = document.getElementById('team-settings-container');
         const teamThemeSelector = document.getElementById('team-theme-selector');
         const teamAssignSelector = document.getElementById('team-assign-selector');
@@ -287,12 +303,18 @@
         const moleWhackCanvas = document.getElementById('mole-whack-canvas');
         const moleGrid = document.getElementById('mole-grid');
 
+        const instructionModal = document.getElementById('instruction-modal');
+        const instructionTitle = document.getElementById('instruction-title');
+        const instructionBody = document.getElementById('instruction-body');
+        const countdownOverlay = document.getElementById('countdown-overlay');
+        const countdownText = document.getElementById('countdown-text');
+
         // --- State Variables ---
         let gameId;
         let gameplayMode = 'fill-in-blank';
         let players = {};
         let teams = {};
-        let gameMode = 'personal';
+        let gameMode = 'team'; // 개인전 삭제, 팀전 고정
         let assignMode = 'auto';
         let teamTheme = 'animals';
         let playersUnsubscribe, actionsUnsubscribe;
@@ -318,8 +340,9 @@
         const difficultySettings = {
             speed: 0.5, 
             points: 10,
-            penalty: -5
+            penalty: -2 // 감점 -2점으로 수정
         };
+        const TOUCH_LIMIT_PER_ROUND = 3; // 팀당 라운드별 터치 제한
 
         const teamNameThemes = {
             animals: ["🦁 사자", "🐯 호랑이", "🐻 곰", "🦊 여우", "🦅 독수리", "🦄 유니콘", "🐉 용", "🐘 코끼리", "🐬 돌고래", "🦈 상어"],
@@ -329,25 +352,12 @@
         // --- Classes for Fill-in-Blank Game ---
         class PlayerCharacter {
             constructor(id, name, teamId) {
-                this.id = id;
-                this.name = name;
-                this.teamId = teamId;
-                this.width = 50;
-                this.height = 40;
+                this.id = id; this.name = name; this.teamId = teamId;
+                this.width = 50; this.height = 40;
                 this.x = Math.random() * (fillInBlankCanvas.width - this.width);
                 this.y = fillInBlankCanvas.height - this.height - 10;
                 this.flash = 0;
-                
-                const sheepSVG = `
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 64 49">
-                      <g fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3">
-                        <path d="M20,25 a10,10 0 1,1 20,0 a15,15 0 1,1 -20,0" transform="translate(0, 5)"/>
-                        <circle cx="15" cy="20" r="8"/><circle cx="45" cy="20" r="8"/><circle cx="30" cy="12" r="10"/>
-                        <g fill="#000" stroke="none"><circle cx="25" cy="30" r="1.5"/><circle cx="35" cy="30" r="1.5"/></g>
-                        <path d="M 28 35 q 2 -3 4 0" stroke="black" fill="none" stroke-width="1"/>
-                      </g>
-                      <rect x="20" y="38" width="5" height="7" rx="2" fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3" /><rect x="35" y="38" width="5" height="7" rx="2" fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3"/>
-                    </svg>`;
+                const sheepSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 64 49"><g fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3"><path d="M20,25 a10,10 0 1,1 20,0 a15,15 0 1,1 -20,0" transform="translate(0, 5)"/><circle cx="15" cy="20" r="8"/><circle cx="45" cy="20" r="8"/><circle cx="30" cy="12" r="10"/><g fill="#000" stroke="none"><circle cx="25" cy="30" r="1.5"/><circle cx="35" cy="30" r="1.5"/></g><path d="M 28 35 q 2 -3 4 0" stroke="black" fill="none" stroke-width="1"/></g><rect x="20" y="38" width="5" height="7" rx="2" fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3" /><rect x="35" y="38" width="5" height="7" rx="2" fill="white" stroke="${this.teamId === 'teamA' ? '#3b82f6' : '#ef4444'}" stroke-width="3"/></svg>`;
                 this.image = new Image();
                 this.image.src = `data:image/svg+xml;base64,${btoa(sheepSVG)}`;
             }
@@ -369,7 +379,6 @@
                 beams.push(new Beam(this.x + this.width / 2, this.y, beamColor));
             }
         }
-        
         class Enemy {
              constructor(x, y, word, isCorrect, number) {
                 this.x = x; this.y = y;
@@ -379,124 +388,65 @@
                 ctx.font = 'bold 30px Gowun Dodum';
                 this.width = ctx.measureText(this.word).width + 40;
                 this.height = 50;
-
-                const monsterSVG = `
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="${this.width}" height="${this.height}">
-                        <path d="M5,45 C5,20 45,20 45,45 Q40,40 35,45 C30,40 20,40 15,45 Q10,40 5,45 Z" fill="#4A5568"/>
-                        <circle cx="18" cy="25" r="4" fill="white">
-                            <animate attributeName="cy" values="25;22;25" dur="1s" repeatCount="indefinite" />
-                        </circle>
-                        <circle cx="32" cy="25" r="4" fill="white">
-                            <animate attributeName="cy" values="25;22;25" dur="1s" repeatCount="indefinite" />
-                        </circle>
-                    </svg>`;
+                const monsterSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="${this.width}" height="${this.height}"><path d="M5,45 C5,20 45,20 45,45 Q40,40 35,45 C30,40 20,40 15,45 Q10,40 5,45 Z" fill="#4A5568"/><circle cx="18" cy="25" r="4" fill="white"><animate attributeName="cy" values="25;22;25" dur="1s" repeatCount="indefinite" /></circle><circle cx="32" cy="25" r="4" fill="white"><animate attributeName="cy" values="25;22;25" dur="1s" repeatCount="indefinite" /></circle></svg>`;
                 this.image = new Image();
                 this.image.src = `data:image/svg+xml;base64,${btoa(monsterSVG)}`;
             }
             draw() {
                 ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
-                ctx.font = 'bold 30px Gowun Dodum';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                
-                ctx.strokeStyle = 'black';
-                ctx.lineWidth = 6;
+                ctx.font = 'bold 30px Gowun Dodum'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.strokeStyle = 'black'; ctx.lineWidth = 6;
                 ctx.strokeText(this.word, this.x + this.width / 2, this.y + this.height / 2 + 2);
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillText(this.word, this.x + this.width / 2, this.y + this.height / 2 + 2);
-                
-                ctx.font = 'bold 22px Arial';
-                ctx.fillStyle = 'yellow';
-                ctx.strokeStyle = 'black';
-                ctx.lineWidth = 2;
+                ctx.font = 'bold 22px Arial'; ctx.fillStyle = 'yellow'; ctx.strokeStyle = 'black'; ctx.lineWidth = 2;
                 ctx.strokeText(this.number, this.x + this.width / 2, this.y - 10);
                 ctx.fillText(this.number, this.x + this.width / 2, this.y - 10);
             }
-            update() { 
-                if (!isGamePaused) this.y += this.speed;
-                this.draw();
-            }
+            update() { if (!isGamePaused) this.y += this.speed; this.draw(); }
         }
-
         class Particle {
             constructor(x, y, color) {
                 this.x = x; this.y = y;
                 this.radius = Math.random() * 4 + 2;
                 this.speedX = Math.random() * 6 - 3;
                 this.speedY = Math.random() * 6 - 3;
-                this.life = 100;
-                this.color = color;
+                this.life = 100; this.color = color;
             }
-            draw() {
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(${this.color}, ${this.life / 100})`;
-                ctx.fill();
-            }
-            update() {
-                if (isGamePaused) return;
-                this.x += this.speedX; this.y += this.speedY;
-                this.life -= 3;
-                this.draw();
-            }
+            draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fillStyle = `rgba(${this.color}, ${this.life / 100})`; ctx.fill(); }
+            update() { if (isGamePaused) return; this.x += this.speedX; this.y += this.speedY; this.life -= 3; this.draw(); }
         }
-
         class Beam {
-            constructor(x, y, color) {
-                this.x = x;
-                this.y = y;
-                this.color = color;
-                this.width = 15;
-                this.life = 15; 
-            }
+            constructor(x, y, color) { this.x = x; this.y = y; this.color = color; this.width = 15; this.life = 15; }
             draw() {
                 const alpha = this.life / 15;
                 ctx.fillStyle = `rgba(${this.color}, ${alpha * 0.8})`;
-                ctx.shadowColor = `rgb(${this.color})`;
-                ctx.shadowBlur = 20;
+                ctx.shadowColor = `rgb(${this.color})`; ctx.shadowBlur = 20;
                 ctx.fillRect(this.x - this.width / 2, 0, this.width, this.y);
                 ctx.shadowBlur = 0;
             }
-            update() {
-                if (!isGamePaused) this.life--;
-            }
+            update() { if (!isGamePaused) this.life--; }
         }
         
         // --- Audio Functions ---
         function setupAudio() {
             if (synth || (Tone.context && Tone.context.state === 'running')) return;
-            try {
-                Tone.start();
-                synth = new Tone.PolySynth(Tone.Synth).toDestination();
-            } catch (e) {
-                console.warn("Could not start audio context.", e);
-            }
+            try { Tone.start(); synth = new Tone.PolySynth(Tone.Synth).toDestination(); } catch (e) { console.warn("Could not start audio context.", e); }
         }
-        
-        const playSound = (logic) => {
-            if (synth && isSoundEnabled) logic();
-        };
-
+        const playSound = (logic) => { if (synth && isSoundEnabled) logic(); };
         const playCorrectSound = () => playSound(() => synth.triggerAttackRelease(['C5', 'G5'], '8n'));
         const playIncorrectSound = () => playSound(() => synth.triggerAttackRelease('C3', '8n'));
         const playRoundStartSound = () => playSound(() => synth.triggerAttackRelease('C4', '8n'));
         const playFinishSound = () => playSound(() => synth.triggerAttackRelease(['C4', 'E4', 'G4', 'C5'], '4n'));
         const playWhackSound = () => playSound(() => synth.triggerAttackRelease('E3', '16n'));
-        
-        function toggleSound() {
-            isSoundEnabled = !isSoundEnabled;
-            soundOnIcon.classList.toggle('hidden', !isSoundEnabled);
-            soundOffIcon.classList.toggle('hidden', isSoundEnabled);
-        }
+        function toggleSound() { isSoundEnabled = !isSoundEnabled; soundOnIcon.classList.toggle('hidden', !isSoundEnabled); soundOffIcon.classList.toggle('hidden', isSoundEnabled); }
 
         // --- Core Game Logic ---
         async function initializeHost() {
             const nameTheme = teamNameThemes[teamTheme];
             const teamAIndex = Math.floor(Math.random() * nameTheme.length);
             let teamBIndex;
-            do {
-                teamBIndex = Math.floor(Math.random() * nameTheme.length);
-            } while (teamAIndex === teamBIndex);
+            do { teamBIndex = Math.floor(Math.random() * nameTheme.length); } while (teamAIndex === teamBIndex);
             
             teams = {
                 teamA: { name: nameTheme[teamAIndex], score: 0 },
@@ -504,12 +454,8 @@
             };
 
             const gameDocRef = await addDoc(collection(db, "games"), {
-                state: "lobby",
-                createdAt: serverTimestamp(),
-                mode: gameMode,
-                assignMode: assignMode,
-                teams: teams,
-                settings: { gameplayMode: gameplayMode }
+                state: "lobby", createdAt: serverTimestamp(), mode: gameMode,
+                assignMode: assignMode, teams: teams, settings: { gameplayMode: gameplayMode }
             });
             gameId = gameDocRef.id;
             gameIdDisplay.textContent = gameId;
@@ -521,13 +467,16 @@
             qr.make();
             qrcodeContainer.innerHTML = qr.createImgTag(6);
             
-            const playersQuery = query(collection(db, "games", gameId, "players"));
-            
-            playersUnsubscribe = onSnapshot(playersQuery, (snapshot) => {
+            listenToPlayers();
+            listenToGameChanges();
+        }
+
+        function listenToPlayers() {
+             if (playersUnsubscribe) playersUnsubscribe();
+             const playersQuery = query(collection(db, "games", gameId, "players"));
+             playersUnsubscribe = onSnapshot(playersQuery, (snapshot) => {
                 const currentPlayersInDB = {};
-                 snapshot.forEach(doc => {
-                    currentPlayersInDB[doc.id] = doc.data();
-                });
+                 snapshot.forEach(doc => { currentPlayersInDB[doc.id] = doc.data(); });
 
                 snapshot.docChanges().forEach(change => {
                     if (change.type === "added") {
@@ -548,23 +497,19 @@
                 }
 
                 updatePlayerListUI();
-                if (gameMode === 'personal') {
-                    updateScoreboard(players);
-                }
-                
-                startGameButton.disabled = Object.keys(players).length === 0;
+                updateStartButtonState();
             });
+        }
 
+        function listenToGameChanges() {
             onSnapshot(doc(db, "games", gameId), (docSnap) => {
                 if (docSnap.exists() && docSnap.data().teams) {
                     const gameData = docSnap.data();
                     teams = gameData.teams;
-                    gameMode = gameData.mode;
-                     if (gameMode === 'team') {
-                        teamANameEl.textContent = teams.teamA.name;
-                        teamBNameEl.textContent = teams.teamB.name;
-                        updateTeamScoreboard();
-                    }
+                    assignMode = gameData.assignMode;
+                    teamANameEl.textContent = teams.teamA.name;
+                    teamBNameEl.textContent = teams.teamB.name;
+                    updateTeamScoreboard();
                 }
             });
         }
@@ -573,39 +518,48 @@
             playerList.innerHTML = '';
             teamAListEl.innerHTML = '';
             teamBListEl.innerHTML = '';
+            let unassignedCount = 0;
+            
             const playerIds = Object.keys(players);
-            playerCountEl.textContent = playerIds.length;
             
             if (playerIds.length === 0) {
                 playerList.innerHTML = '<li class="text-gray-500 p-2">아직 참가자가 없습니다...</li>';
+                unassignedPlayerCountEl.textContent = 0;
                 return;
             }
 
             playerIds.forEach(id => {
                 const playerData = players[id];
                 const li = document.createElement('li');
-                li.className = 'player-item p-2 rounded-md';
-                li.textContent = `🐑 ${playerData.name}`;
+                li.className = `player-item p-2 rounded-md flex items-center gap-2 ${playerData.status === 'ready' ? 'player-ready' : 'player-waiting'}`;
+                li.innerHTML = `<span>🐑 ${playerData.name}</span> <span class="text-xs px-2 py-0.5 rounded-full ${playerData.status === 'ready' ? 'bg-green-200' : 'bg-gray-200'}">${playerData.status === 'ready' ? '준비완료' : '준비중'}</span>`;
                 li.dataset.playerId = id;
 
-                if (gameMode === 'team') {
-                    if (playerData.team === 'teamA') teamAListEl.appendChild(li);
-                    else if (playerData.team === 'teamB') teamBListEl.appendChild(li);
-                    else playerList.appendChild(li); 
-                } else {
+                if (playerData.team === 'teamA') teamAListEl.appendChild(li);
+                else if (playerData.team === 'teamB') teamBListEl.appendChild(li);
+                else {
                     playerList.appendChild(li);
+                    unassignedCount++;
                 }
             });
+            unassignedPlayerCountEl.textContent = unassignedCount;
         }
-
-        function updateScoreboard(playerData) {
-            scoreboard.innerHTML = '';
-            const sortedPlayers = Object.entries(playerData).sort((a, b) => b[1].score - a[1].score);
-            for (const [id, data] of sortedPlayers) {
-                const div = document.createElement('div');
-                div.className = 'p-2 bg-white/80 rounded-md shadow text-center';
-                div.innerHTML = `<div class="font-bold text-lg">${data.name}</div><div class="text-xl">${data.score}점</div>`;
-                scoreboard.appendChild(div);
+        
+        function updateStartButtonState() {
+            const totalPlayers = Object.keys(players).length;
+            if (totalPlayers === 0) {
+                startGameButton.disabled = true;
+                startGameNotice.classList.add('hidden');
+                return;
+            }
+            const readyPlayers = Object.values(players).filter(p => p.status === 'ready').length;
+            
+            if (totalPlayers > 0 && totalPlayers === readyPlayers) {
+                startGameButton.disabled = false;
+                startGameNotice.classList.add('hidden');
+            } else {
+                startGameButton.disabled = true;
+                startGameNotice.classList.remove('hidden');
             }
         }
 
@@ -621,97 +575,25 @@
         }
         
         function listenForActions() {
+            if (actionsUnsubscribe) actionsUnsubscribe();
             const actionsRef = collection(db, "games", gameId, "actions");
-            actionsUnsubscribe = onSnapshot(actionsRef, (snapshot) => {
-                snapshot.docChanges().forEach((change) => {
-                    if (change.type === "added" && change.doc.data().timestamp) {
+            const q = query(actionsRef, where("timestamp", ">", serverTimestamp()));
+            actionsUnsubscribe = onSnapshot(q, (snapshot) => {
+                 snapshot.docChanges().forEach((change) => {
+                    if (change.type === "added") {
                         const action = change.doc.data();
-                        if (gameplayMode === 'fill-in-blank') {
-                            handlePlayerAction(action.playerId, action.payload);
-                        } else if (gameplayMode === 'mole-whack') {
+                        if (gameplayMode.includes('whack')) {
                             handleMoleWhackAction(action.playerId, action.payload);
+                        } else {
+                            handlePlayerAction(action.playerId, action.payload);
                         }
                     }
                 });
             });
         }
 
-        async function handlePlayerAction(playerId, payload) {
+        async function handleAction(playerId, isCorrect, targetInfo = {}) {
             if (!roundActive || isGamePaused) return;
-            const targetNumber = parseInt(payload.target, 10);
-            const targetEnemy = enemies.find(e => e.number === targetNumber);
-            if (targetEnemy) {
-                const player = players[playerId];
-                if (player && player.character) {
-                    player.character.x = targetEnemy.x + (targetEnemy.width / 2) - (player.character.width / 2);
-                    player.character.shoot();
-                }
-
-                try {
-                    await runTransaction(db, async (transaction) => {
-                        const playerDocRef = doc(db, "games", gameId, "players", playerId);
-                        const gameDocRef = doc(db, "games", gameId);
-                        const playerDoc = await transaction.get(playerDocRef);
-                        const gameDoc = await transaction.get(gameDocRef);
-
-                        if (!playerDoc.exists() || !gameDoc.exists() || !roundActive) return;
-                        
-                        const currentScore = playerDoc.data().score || 0;
-                        const currentTeam = playerDoc.data().team;
-                        const currentTeams = gameDoc.data().teams;
-
-                        if (targetEnemy.isCorrect) {
-                            roundActive = false;
-                            playCorrectSound();
-                            
-                            transaction.update(playerDocRef, { score: currentScore + difficultySettings.points });
-                            if (gameMode === 'team' && currentTeam) {
-                                const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.points;
-                                transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
-                            }
-
-                            for(let i = 0; i < 30; i++) {
-                                particles.push(new Particle(targetEnemy.x + targetEnemy.width/2, targetEnemy.y + targetEnemy.height/2, '255, 215, 0'));
-                            }
-                            enemies = [];
-                            setTimeout(() => nextRound(), 2000);
-                        } else {
-                            playIncorrectSound();
-                            if (gameMode === 'team' && currentTeam) {
-                                const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.penalty;
-                                transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
-                            }
-                        }
-                    });
-                } catch (e) {
-                    console.error("Transaction failed: ", e);
-                }
-            }
-        }
-        
-        async function handleMoleWhackAction(playerId, payload) {
-            if (!roundActive || isGamePaused) return;
-            
-            const holeIndex = payload.holeIndex;
-            const mole = moles[holeIndex];
-            
-            if (!mole || !mole.isUp) return;
-
-            playWhackSound();
-            
-            const holeElement = document.getElementById(`mole-hole-${holeIndex}`);
-            const effect = document.createElement('div');
-            effect.className = 'hit-effect';
-            
-            if (mole.isCorrect) {
-                effect.textContent = '⭐';
-            } else {
-                effect.textContent = '💨';
-            }
-            holeElement.appendChild(effect);
-            setTimeout(() => effect.remove(), 500);
-
-            mole.hide();
 
             try {
                 await runTransaction(db, async (transaction) => {
@@ -721,53 +603,158 @@
                     const gameDoc = await transaction.get(gameDocRef);
 
                     if (!playerDoc.exists() || !gameDoc.exists() || !roundActive) return;
-
-                    const currentScore = playerDoc.data().score || 0;
+                    
                     const currentTeam = playerDoc.data().team;
-                    const currentTeams = gameDoc.data().teams;
+                    const gameData = gameDoc.data();
+                    const currentTeams = gameData.teams;
+                    const touchCount = (gameData.roundTouchCount && gameData.roundTouchCount[currentTeam]) || 0;
 
-                    if (mole.isCorrect) {
+                    if (touchCount >= TOUCH_LIMIT_PER_ROUND) {
+                        return; // 기회 소진
+                    }
+
+                    // 터치 횟수 증가
+                    transaction.update(gameDocRef, { [`roundTouchCount.${currentTeam}`]: touchCount + 1 });
+
+                    if (isCorrect) {
                         roundActive = false;
                         playCorrectSound();
                         
-                        transaction.update(playerDocRef, { score: currentScore + difficultySettings.points });
-                        if (gameMode === 'team' && currentTeam) {
-                            const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.points;
-                            transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
+                        const newPlayerScore = (playerDoc.data().score || 0) + difficultySettings.points;
+                        transaction.update(playerDocRef, { score: newPlayerScore });
+                        
+                        const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.points;
+                        transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
+
+                        // 정답 시각 효과
+                        if (gameplayMode === 'fill-in-blank' && targetInfo.enemy) {
+                            for(let i = 0; i < 30; i++) {
+                                particles.push(new Particle(targetInfo.enemy.x + targetInfo.enemy.width/2, targetInfo.enemy.y + targetInfo.enemy.height/2, '255, 215, 0'));
+                            }
+                            enemies = [];
+                        } else if (gameplayMode.includes('whack') && targetInfo.holeIndex !== undefined) {
+                            const holeElement = document.getElementById(`mole-hole-${targetInfo.holeIndex}`);
+                            const effect = document.createElement('div');
+                            effect.className = 'hit-effect';
+                            effect.textContent = '⭐';
+                            holeElement.appendChild(effect);
+                            setTimeout(() => effect.remove(), 500);
+                            moles[targetInfo.holeIndex].hide();
                         }
                         
                         clearInterval(moleGameInterval);
                         clearInterval(roundTimerId);
                         setTimeout(() => nextRound(), 2000);
 
-                    } else {
+                    } else { // 오답
                         playIncorrectSound();
-                        transaction.update(playerDocRef, { score: currentScore + difficultySettings.penalty });
-                        if (gameMode === 'team' && currentTeam) {
-                            const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.penalty;
-                            transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
+                        const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.penalty;
+                        transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
+                        
+                         // 오답 시각 효과 (두더지 게임)
+                        if (gameplayMode.includes('whack') && targetInfo.holeIndex !== undefined) {
+                             const holeElement = document.getElementById(`mole-hole-${targetInfo.holeIndex}`);
+                            const effect = document.createElement('div');
+                            effect.className = 'hit-effect';
+                            effect.textContent = '💨';
+                            holeElement.appendChild(effect);
+                            setTimeout(() => effect.remove(), 500);
+                            moles[targetInfo.holeIndex].hide();
                         }
                     }
                 });
             } catch (e) {
-                console.error("Mole Whack Transaction failed: ", e);
+                console.error("Transaction failed: ", e);
+            }
+        }
+        
+        async function handlePlayerAction(playerId, payload) {
+            const targetNumber = parseInt(payload.target, 10);
+            const targetEnemy = enemies.find(e => e.number === targetNumber);
+            if (targetEnemy) {
+                const player = players[playerId];
+                if (player && player.character) {
+                    player.character.x = targetEnemy.x + (targetEnemy.width / 2) - (player.character.width / 2);
+                    player.character.shoot();
+                }
+                await handleAction(playerId, targetEnemy.isCorrect, { enemy: targetEnemy });
             }
         }
 
-        async function startGame() {
-            selectedCategories = [...categorySelector.querySelectorAll('.selected')].map(btn => btn.dataset.category);
-            if (selectedCategories.length === 0) {
-                alert('하나 이상의 카테고리를 선택해주세요.');
-                return;
+        async function handleMoleWhackAction(playerId, payload) {
+            const holeIndex = payload.holeIndex;
+            const mole = moles[holeIndex];
+            if (!mole || !mole.isUp) return;
+            playWhackSound();
+            await handleAction(playerId, mole.isCorrect, { holeIndex: holeIndex });
+        }
+        
+        function showInstructions() {
+            let title, htmlContent;
+            const isMoleGame = gameplayMode.includes('whack');
+            const rounds = isMoleGame ? moleRoundsInput.value : roundsInput.value;
+            
+            switch(gameplayMode) {
+                case 'fill-in-blank':
+                    title = '말씀 채우기 안내';
+                    htmlContent = `
+                        <p><strong>게임 방법:</strong> 하늘에서 내려오는 단어들 중, 위에 제시된 말씀의 빈칸에 들어갈 올바른 단어를 선택하세요.</p>
+                        <p><strong>게임 시간:</strong> 총 ${timeLimitInput.value}분 동안 진행됩니다.</p>
+                        <p><strong>주의 사항:</strong> 팀별로 문제당 <strong>${TOUCH_LIMIT_PER_ROUND}번</strong>의 기회가 주어집니다. 오답 시 -2점 감점됩니다.</p>
+                    `;
+                    break;
+                case 'first-word-whack':
+                    title = '첫어절 맞추기 안내';
+                    htmlContent = `
+                        <p><strong>게임 방법:</strong> 제시된 말씀의 '첫 어절'이 적힌 두더지를 잡으세요.</p>
+                        <p><strong>게임 시간:</strong> 문제당 ${moleTimeLimitInput.value}초의 제한 시간이 있습니다.</p>
+                        <p><strong>주의 사항:</strong> 팀별로 문제당 <strong>${TOUCH_LIMIT_PER_ROUND}번</strong>의 기회가 주어집니다. 오답 시 -2점 감점됩니다.</p>
+                    `;
+                    break;
+                case 'blank-whack':
+                     title = '빈칸 맞추기 안내';
+                    htmlContent = `
+                        <p><strong>게임 방법:</strong> 빈칸이 있는 말씀이 제시됩니다. 빈칸에 들어갈 올바른 단어가 적힌 두더지를 잡으세요.</p>
+                        <p><strong>게임 시간:</strong> 문제당 ${moleTimeLimitInput.value}초의 제한 시간이 있습니다.</p>
+                        <p><strong>주의 사항:</strong> 팀별로 문제당 <strong>${TOUCH_LIMIT_PER_ROUND}번</strong>의 기회가 주어집니다. 오답 시 -2점 감점됩니다.</p>
+                    `;
+                    break;
             }
+            instructionTitle.textContent = title;
+            instructionBody.innerHTML = htmlContent;
+            instructionModal.classList.remove('hidden');
 
-            setupAudio();
+            setTimeout(() => {
+                instructionModal.classList.add('hidden');
+                startCountdown();
+            }, 5000); // 5초간 안내문 표시
+        }
+
+        function startCountdown() {
+            countdownOverlay.classList.remove('hidden');
+            let count = 3;
+            countdownText.textContent = count;
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownText.textContent = count;
+                } else {
+                    clearInterval(countdownInterval);
+                    countdownOverlay.classList.add('hidden');
+                    proceedToStartGame();
+                }
+            }, 1000);
+        }
+
+        async function proceedToStartGame() {
             listenForActions();
             lobbyScreen.classList.add('hidden');
             gameScreen.classList.remove('hidden');
             
             let settings;
-            if (gameplayMode === 'fill-in-blank') {
+            const isMoleGame = gameplayMode.includes('whack');
+
+            if (!isMoleGame) { // 말씀 채우기
                 totalRounds = parseInt(roundsInput.value) || 10;
                 totalGameTime = (parseInt(timeLimitInput.value) || 1) * 60;
                 fillInBlankCanvas.classList.remove('hidden');
@@ -780,7 +767,7 @@
                 startTotalGameTimer();
                 animate();
                 settings = { categories: selectedCategories, rounds: totalRounds, time: totalGameTime, gameplayMode };
-            } else {
+            } else { // 두더지 게임들
                 totalRounds = parseInt(moleRoundsInput.value) || 10;
                 currentMoleSpeed = parseFloat(moleSpeedInput.value) || 5.0;
                 fillInBlankCanvas.classList.add('hidden');
@@ -806,30 +793,33 @@
             currentRound++;
             roundCounterEl.textContent = `${currentRound} / ${totalRounds}`;
             
+            // 라운드 시작 시 터치 횟수 초기화
+            await updateDoc(doc(db, "games", gameId), {
+                currentRound,
+                roundTouchCount: { teamA: 0, teamB: 0 }
+            });
+
             if (gameplayMode === 'fill-in-blank') {
                 await nextRoundFillInBlank();
             } else {
-                await nextRoundMoleWhack();
+                await nextRoundWhackGame();
             }
         }
 
-        async function nextRoundFillInBlank() {
-            roundActive = true;
-            playRoundStartSound();
-            enemies = [];
-            particles = [];
-            beams = [];
-            
-            let filteredVerses = versesData;
+        function getFilteredVerses() {
+            let filtered = versesData;
             if (!selectedCategories.includes('전체')) {
-                filteredVerses = versesData.filter(v => v.카테고리 && selectedCategories.includes(v.카테고리));
+                filtered = versesData.filter(v => v.카테고리 && selectedCategories.includes(v.카테고리));
             }
-            if (filteredVerses.length === 0) {
+            if (filtered.length === 0) {
                 alert('선택한 카테고리에 해당하는 말씀 구절이 없습니다. 게임을 종료합니다.');
                 endGame();
-                return;
+                return null;
             }
-            
+            return filtered;
+        }
+
+        function getVerseWithBlank(filteredVerses) {
             let verse, words, blankIndex, candidateWords;
             let attempts = 0;
             do {
@@ -841,13 +831,28 @@
 
             if (candidateWords.length === 0) {
                 candidateWords = words.filter(w => w.length > 1);
-                if(candidateWords.length === 0) { nextRound(); return; }
+                if(candidateWords.length === 0) return null;
             }
-
+            
             currentBlankWord = candidateWords[Math.floor(Math.random() * candidateWords.length)];
             blankIndex = words.indexOf(currentBlankWord);
             
-            const distractors = generateDistractors(currentBlankWord, versesData);
+            return { verse, words, blankIndex, currentBlankWord };
+        }
+
+        async function nextRoundFillInBlank() {
+            roundActive = true;
+            playRoundStartSound();
+            enemies = []; particles = []; beams = [];
+            
+            const filteredVerses = getFilteredVerses();
+            if (!filteredVerses) return;
+            
+            const verseInfo = getVerseWithBlank(filteredVerses);
+            if (!verseInfo) { nextRound(); return; }
+            
+            const { verse, words, blankIndex, currentBlankWord } = verseInfo;
+            const distractors = generateDistractors(currentBlankWord, versesData, 2);
 
             const options = [currentBlankWord, ...distractors];
             options.sort(() => Math.random() - 0.5);
@@ -861,61 +866,55 @@
             };
             questionVerseEl.textContent = questionPayload.verse;
             questionTextEl.textContent = questionPayload.text;
-            await updateDoc(doc(db, "games", gameId), {
-                currentRound,
-                question: questionPayload,
-            });
+            await updateDoc(doc(db, "games", gameId), { question: questionPayload });
         }
         
-        async function nextRoundMoleWhack() {
+        async function nextRoundWhackGame() {
             roundActive = true;
             playRoundStartSound();
             
             const baseSpeed = parseFloat(moleSpeedInput.value) || 5.0;
             currentMoleSpeed = Math.max(0.5, baseSpeed - (currentRound * 0.1));
 
-            let filteredVerses = versesData;
-            if (!selectedCategories.includes('전체')) {
-                filteredVerses = versesData.filter(v => v.카테고리 && selectedCategories.includes(v.카테고리));
-            }
-            if (filteredVerses.length === 0) {
-                alert('선택한 카테고리에 해당하는 말씀 구절이 없습니다. 게임을 종료합니다.');
-                endGame();
-                return;
-            }
-            
-            const verse = filteredVerses[Math.floor(Math.random() * filteredVerses.length)];
-            const firstWord = verse.본문.split(' ')[0].replace(/[.,!?]/g, '');
+            const filteredVerses = getFilteredVerses();
+            if (!filteredVerses) return;
 
-            const allFirstWords = Array.from(new Set(versesData.map(v => v.본문.split(' ')[0].replace(/[.,!?]/g, ''))));
-            const distractors = [];
-            while(distractors.length < 8) {
-                const randomWord = allFirstWords[Math.floor(Math.random() * allFirstWords.length)];
-                if (randomWord && randomWord !== firstWord && !distractors.includes(randomWord)) {
-                    distractors.push(randomWord);
-                }
+            let questionPayload, wordsForRound, correctAnswer;
+
+            if (gameplayMode === 'first-word-whack') {
+                const verse = filteredVerses[Math.floor(Math.random() * filteredVerses.length)];
+                correctAnswer = verse.본문.split(' ')[0].replace(/[.,!?]/g, '');
+                
+                const allFirstWords = Array.from(new Set(versesData.map(v => v.본문.split(' ')[0].replace(/[.,!?]/g, ''))));
+                const distractors = generateDistractors(correctAnswer, allFirstWords, 8);
+                
+                wordsForRound = [correctAnswer, ...distractors];
+                questionPayload = { verse: `[${verse.장절}]`, text: '첫 어절을 잡으세요!' };
+
+            } else { // blank-whack
+                const verseInfo = getVerseWithBlank(filteredVerses);
+                if (!verseInfo) { nextRound(); return; }
+                const { verse, words, blankIndex, currentBlankWord } = verseInfo;
+                correctAnswer = currentBlankWord;
+                const distractors = generateDistractors(correctAnswer, versesData, 8);
+                
+                wordsForRound = [correctAnswer, ...distractors];
+                questionPayload = {
+                    verse: `[${verse.장절}]`,
+                    text: words.map((w, i) => (i === blankIndex ? '_______' : w)).join(' '),
+                };
             }
 
             moles.forEach(mole => mole.reset());
-            const wordsForRound = [firstWord, ...distractors];
             wordsForRound.sort(() => Math.random() - 0.5);
-
             moles.forEach((mole, index) => {
                 mole.word = wordsForRound[index];
-                mole.isCorrect = (mole.word === firstWord);
+                mole.isCorrect = (mole.word === correctAnswer);
             });
 
-            const questionPayload = {
-                verse: `[${verse.장절}]`,
-                text: '첫 어절을 잡으세요!',
-            };
             questionVerseEl.textContent = questionPayload.verse;
             questionTextEl.textContent = questionPayload.text;
-            
-            await updateDoc(doc(db, "games", gameId), {
-                currentRound,
-                question: questionPayload,
-            });
+            await updateDoc(doc(db, "games", gameId), { question: questionPayload });
 
             startMoleGameLoop();
             startRoundTimer();
@@ -944,25 +943,15 @@
             clearInterval(moleGameInterval);
             moleGameInterval = setInterval(() => {
                 if (!roundActive || isGamePaused) return;
-
                 const availableMoles = moles.filter(m => !m.isUp);
                 if (availableMoles.length === 0) return;
-                
-                let molesToPop = 1;
-                if (currentRound > 7) {
-                    molesToPop = 3;
-                } else if (currentRound > 3) {
-                    molesToPop = 2;
-                }
-                
+                let molesToPop = Math.min(1 + Math.floor(currentRound / 4), 3);
                 const finalMolesToPop = Math.min(molesToPop, availableMoles.length);
 
                 for (let i = 0; i < finalMolesToPop; i++) {
                     const moleIndex = Math.floor(Math.random() * availableMoles.length);
                     const mole = availableMoles.splice(moleIndex, 1)[0];
-                    if (mole) {
-                        mole.pop();
-                    }
+                    if (mole) mole.pop();
                 }
             }, 1000);
         }
@@ -974,20 +963,14 @@
                 const hole = document.createElement('div');
                 hole.id = `mole-hole-${i}`;
                 hole.className = 'mole-hole';
-                
                 const moleEl = document.createElement('div');
                 moleEl.className = 'mole';
                 const moleSVG = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g><ellipse ry="22" rx="28" cy="60" cx="50" fill="#795548"/><ellipse ry="3.5" rx="5" cy="50" cx="38" fill="#000000"/><ellipse ry="3.5" rx="5" cy="50" cx="62" fill="#000000"/><ellipse ry="6" rx="9" cy="58" cx="50" fill="#d3a089"/><path d="M 45,62 A 5 5 0 0 1 55 62" stroke="#000" fill="none" stroke-width="1.5"/></g></svg>`;
                 moleEl.innerHTML = `<div class="word-plate"></div>${moleSVG}`;
                 hole.appendChild(moleEl);
                 moleGrid.appendChild(hole);
-
                 moles.push({
-                    element: moleEl,
-                    word: '',
-                    isCorrect: false,
-                    isUp: false,
-                    timeoutId: null,
+                    element: moleEl, word: '', isCorrect: false, isUp: false, timeoutId: null,
                     pop() {
                         if (this.isUp) return;
                         this.isUp = true;
@@ -995,16 +978,8 @@
                         this.element.classList.add('up');
                         this.timeoutId = setTimeout(() => this.hide(), currentMoleSpeed * 1000);
                     },
-                    hide() {
-                        this.isUp = false;
-                        this.element.classList.remove('up');
-                    },
-                    reset() {
-                        this.hide();
-                        clearTimeout(this.timeoutId);
-                        this.word = '';
-                        this.isCorrect = false;
-                    }
+                    hide() { this.isUp = false; this.element.classList.remove('up'); },
+                    reset() { this.hide(); clearTimeout(this.timeoutId); this.word = ''; this.isCorrect = false; }
                 });
             }
         }
@@ -1018,9 +993,7 @@
                 const minutes = Math.floor(timeLeft / 60);
                 const seconds = timeLeft % 60;
                 timerEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-                if (timeLeft <= 0) {
-                    endGame();
-                }
+                if (timeLeft <= 0) endGame();
             }, 1000);
         }
 
@@ -1030,137 +1003,122 @@
             if (isGamePaused) {
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
                 ctx.fillRect(0, 0, fillInBlankCanvas.width, fillInBlankCanvas.height);
-                ctx.fillStyle = 'white';
-                ctx.font = 'bold 48px Gowun Dodum';
-                ctx.textAlign = 'center';
+                ctx.fillStyle = 'white'; ctx.font = 'bold 48px Gowun Dodum'; ctx.textAlign = 'center';
                 ctx.fillText('일시정지됨', fillInBlankCanvas.width / 2, fillInBlankCanvas.height / 2);
                 return;
             }
-
             ctx.clearRect(0, 0, fillInBlankCanvas.width, fillInBlankCanvas.height);
-            for (const id in players) {
-                if(players[id].character) players[id].character.draw();
-            }
-            enemies.forEach((e, i) => {
-                if (e.y > fillInBlankCanvas.height) {
-                    enemies.splice(i, 1);
-                } else {
-                    e.update();
-                }
-            });
-            if (roundActive && enemies.length === 0) {
-                roundActive = false;
-                setTimeout(() => nextRound(), 1500);
-            }
-            
+            for (const id in players) { if(players[id].character) players[id].character.draw(); }
+            enemies.forEach((e, i) => { if (e.y > fillInBlankCanvas.height) enemies.splice(i, 1); else e.update(); });
+            if (roundActive && enemies.length === 0) { roundActive = false; setTimeout(() => nextRound(), 1500); }
+            beams.forEach((b, i) => { b.update(); if (b.life <= 0) beams.splice(i, 1); });
             beams.forEach(b => b.draw());
-            beams.forEach((b, i) => {
-                b.update();
-                if (b.life <= 0) beams.splice(i, 1);
-            });
-            
-            particles.forEach((p, i) => {
-                p.update();
-                if (p.life <= 0) particles.splice(i, 1);
-            });
+            particles.forEach((p, i) => { p.update(); if (p.life <= 0) particles.splice(i, 1); });
         }
 
         async function endGame() {
-            if (gameScreen.classList.contains('hidden')) return;
+            if (gameScreen.classList.contains('hidden') && !lobbyScreen.classList.contains('hidden')) return;
             roundActive = false;
-            clearInterval(gameTimerId);
-            clearInterval(roundTimerId);
-            clearInterval(moleGameInterval);
+            clearInterval(gameTimerId); clearInterval(roundTimerId); clearInterval(moleGameInterval);
             playFinishSound();
             if (actionsUnsubscribe) actionsUnsubscribe();
             gameScreen.classList.add('hidden');
             resultScreen.classList.remove('hidden');
             await updateDoc(doc(db, "games", gameId), { state: "finished" });
 
-            if (gameMode === 'team') {
-                 const winnerTeamId = teams.teamA.score > teams.teamB.score ? 'teamA' : (teams.teamB.score > teams.teamA.score ? 'teamB' : null);
-                
-                if (winnerTeamId) {
-                    const winnerTeam = teams[winnerTeamId];
-                    const loserTeam = teams[winnerTeamId === 'teamA' ? 'teamB' : 'teamA'];
-                    
-                    const winningPlayers = Object.values(players).filter(p => p.team === winnerTeamId);
-                    const mvp = winningPlayers.length > 0 ? winningPlayers.sort((a, b) => b.score - a.score)[0] : null;
+            const winnerTeamId = teams.teamA.score > teams.teamB.score ? 'teamA' : (teams.teamB.score > teams.teamA.score ? 'teamB' : null);
+            if (winnerTeamId) {
+                const winnerTeam = teams[winnerTeamId];
+                const loserTeam = teams[winnerTeamId === 'teamA' ? 'teamB' : 'teamA'];
+                const winningPlayers = Object.values(players).filter(p => p.team === winnerTeamId);
+                const mvp = winningPlayers.length > 0 ? winningPlayers.sort((a, b) => b.score - a.score)[0] : null;
 
-                    resultTitle.textContent = `🎉 ${winnerTeam.name} 팀 승리! �`;
-                    finalRanking.innerHTML = `
-                        <div class="p-6 bg-green-100 border-2 border-green-500 rounded-lg shadow-lg">
-                            <h3 class="text-3xl font-bold text-green-700">${winnerTeam.name}</h3>
-                            <p class="text-4xl">${winnerTeam.score}점</p>
-                            ${mvp ? `<p class="mt-2 text-lg">👑 최고 기여자: ${mvp.name} (${mvp.score}점)</p>` : ''}
-                        </div>
-                        <div class="p-4 bg-gray-100 rounded-lg">
-                            <h3 class="text-2xl font-bold text-gray-700">${loserTeam.name}</h3>
-                            <p class="text-3xl">${loserTeam.score}점</p>
-                        </div>
-                    `;
-                } else {
-                     resultTitle.textContent = `무승부!`;
-                     finalRanking.innerHTML = `
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="p-6 bg-blue-100 border-2 border-blue-500 rounded-lg shadow-lg">
-                                <h3 class="text-3xl font-bold text-blue-700">${teams.teamA.name}</h3>
-                                <p class="text-4xl">${teams.teamA.score}점</p>
-                            </div>
-                            <div class="p-6 bg-red-100 border-2 border-red-500 rounded-lg shadow-lg">
-                                <h3 class="text-3xl font-bold text-red-700">${teams.teamB.name}</h3>
-                                <p class="text-4xl">${teams.teamB.score}점</p>
-                            </div>
-                        </div>
-                     `;
-                }
+                resultTitle.textContent = `🎉 ${winnerTeam.name} 팀 승리! 🎉`;
+                finalRanking.innerHTML = `
+                    <div class="p-6 bg-green-100 border-2 border-green-500 rounded-lg shadow-lg">
+                        <h3 class="text-3xl font-bold text-green-700">${winnerTeam.name}</h3>
+                        <p class="text-4xl">${winnerTeam.score}점</p>
+                        ${mvp ? `<p class="mt-2 text-lg">👑 최고 기여자: ${mvp.name} (${mvp.score}점)</p>` : ''}
+                    </div>
+                    <div class="p-4 bg-gray-100 rounded-lg">
+                        <h3 class="text-2xl font-bold text-gray-700">${loserTeam.name}</h3>
+                        <p class="text-3xl">${loserTeam.score}점</p>
+                    </div>
+                `;
             } else {
-                resultTitle.textContent = '🎉 최종 결과 🎉';
-                const sortedPlayers = Object.values(players).sort((a,b) => b.score - a.score);
-                finalRanking.innerHTML = '';
-                sortedPlayers.forEach((p, index) => {
-                    const div = document.createElement('div');
-                    const rankEmoji = ['🥇', '🥈', '🥉'][index] || `${index + 1}위`;
-                    div.className = 'p-4 bg-white rounded-lg shadow-md flex justify-between items-center text-2xl';
-                    div.innerHTML = `<span class="font-bold">${rankEmoji} ${p.name}</span><span>${p.score}점</span>`;
-                    finalRanking.appendChild(div);
-                });
+                 resultTitle.textContent = `무승부!`;
+                 finalRanking.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="p-6 bg-blue-100 border-2 border-blue-500 rounded-lg shadow-lg"><h3 class="text-3xl font-bold text-blue-700">${teams.teamA.name}</h3><p class="text-4xl">${teams.teamA.score}점</p></div>
+                        <div class="p-6 bg-red-100 border-2 border-red-500 rounded-lg shadow-lg"><h3 class="text-3xl font-bold text-red-700">${teams.teamB.name}</h3><p class="text-4xl">${teams.teamB.score}점</p></div>
+                    </div>
+                 `;
             }
+        }
+        
+        async function returnToLobby() {
+            const batch = writeBatch(db);
+            // Reset player scores and status
+            Object.keys(players).forEach(playerId => {
+                const playerRef = doc(db, "games", gameId, "players", playerId);
+                batch.update(playerRef, { score: 0, status: "joining" });
+            });
+            // Reset game document
+            const gameRef = doc(db, "games", gameId);
+            batch.update(gameRef, {
+                state: "lobby",
+                currentRound: 0,
+                "teams.teamA.score": 0,
+                "teams.teamB.score": 0,
+                question: null,
+                roundTouchCount: null
+            });
+            await batch.commit();
+
+            // Reset local state
+            currentRound = 0;
+            isGamePaused = false;
+            pauseGameBtn.textContent = '일시정지';
+            
+            // Switch UI
+            resultScreen.classList.add('hidden');
+            lobbyScreen.classList.remove('hidden');
         }
 
         function isValidBlankWord(word) {
             const particlesAndEndings = ['은', '는', '이', '가', '을', '를', '의', '에', '에게', '께', '에서', '으로', '로', '와', '과', '도', '만', '뿐', '까지', '마저', '조차', '부터', '하고', '이며', '이라', '다', '요', '죠', '고', '며', '니', '네', '라', '나', '까', '습니다', 'ㅂ니다', '어요', '아요'];
             const cleanWord = word.replace(/[.,!?]/g, '');
             if (cleanWord.length <= 1) return false;
-            for (const p of particlesAndEndings) {
-                if (cleanWord.endsWith(p)) return false;
-            }
+            for (const p of particlesAndEndings) { if (cleanWord.endsWith(p)) return false; }
             return true;
         }
 
-        function generateDistractors(correctWord, allVerses) {
-            const candidatePool = Array.from(new Set(
-                allVerses
-                    .flatMap(v => v.본문.split(' '))
-                    .map(w => w.replace(/[.,!?]/g, ''))
-                    .filter(w => w.length > 1 && w !== correctWord)
-            ));
-
+        function generateDistractors(correctWord, source, count) {
+            let candidatePool;
+            if (Array.isArray(source)) { // For first-word-whack
+                candidatePool = Array.from(new Set(source.filter(w => w && w !== correctWord)));
+            } else { // For fill-in-blank and blank-whack
+                candidatePool = Array.from(new Set(
+                    source.flatMap(v => v.본문.split(' '))
+                        .map(w => w.replace(/[.,!?]/g, ''))
+                        .filter(w => w.length > 1 && w !== correctWord)
+                ));
+            }
+            
             for (let i = candidatePool.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [candidatePool[i], candidatePool[j]] = [candidatePool[j], candidatePool[i]];
             }
             
-            const distractors = new Set(candidatePool.slice(0, 2));
+            const distractors = new Set(candidatePool.slice(0, count));
 
             const genericDistractors = ["사랑", "믿음", "소망", "예수", "하나님", "천국", "기도", "말씀"];
-            while (distractors.size < 2) {
+            while (distractors.size < count) {
                 const genericWord = genericDistractors[Math.floor(Math.random() * genericDistractors.length)];
                 if (genericWord !== correctWord && !distractors.has(genericWord)) {
                     distractors.add(genericWord);
                 }
             }
-            
             return Array.from(distractors);
         }
 
@@ -1171,27 +1129,13 @@
             gameplayModeSelector.querySelectorAll('.gameplay-btn').forEach(btn => btn.classList.remove('selected'));
             e.target.classList.add('selected');
 
-            fillInBlankSettings.classList.toggle('hidden', gameplayMode !== 'fill-in-blank');
-            moleWhackSettings.classList.toggle('hidden', gameplayMode !== 'mole-whack');
+            const isMoleGame = gameplayMode.includes('whack');
+            fillInBlankSettings.classList.toggle('hidden', isMoleGame);
+            moleWhackSettings.classList.toggle('hidden', !isMoleGame);
             
-            if (gameId) {
-                 await updateDoc(doc(db, "games", gameId), { "settings.gameplayMode": gameplayMode });
-            }
+            if (gameId) await updateDoc(doc(db, "games", gameId), { "settings.gameplayMode": gameplayMode });
         });
 
-        gameModeSelector.addEventListener('click', async (e) => {
-            if (e.target.tagName !== 'BUTTON') return;
-            gameMode = e.target.dataset.mode;
-            gameModeSelector.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('selected'));
-            e.target.classList.add('selected');
-            if (gameId) await updateDoc(doc(db, "games", gameId), { mode: gameMode });
-            teamSettingsContainer.classList.toggle('hidden', gameMode !== 'team');
-            playerListContainer.classList.toggle('hidden', gameMode === 'team');
-            teamDisplay.classList.toggle('hidden', gameMode !== 'team');
-            teamDisplay.classList.toggle('grid', gameMode === 'team');
-            updatePlayerListUI();
-        });
-        
         teamThemeSelector.addEventListener('click', async (e) => {
             if (e.target.tagName !== 'BUTTON') return;
             teamTheme = e.target.dataset.theme;
@@ -1237,8 +1181,16 @@
         });
         
         forceEndGameBtn.addEventListener('click', endGame);
-        startGameButton.addEventListener('click', startGame);
-        restartButton.addEventListener('click', () => window.location.reload());
+        startGameButton.addEventListener('click', () => {
+            setupAudio();
+            selectedCategories = [...categorySelector.querySelectorAll('.selected')].map(btn => btn.dataset.category);
+            if (selectedCategories.length === 0) {
+                alert('하나 이상의 카테고리를 선택해주세요.');
+                return;
+            }
+            showInstructions();
+        });
+        returnToLobbyBtn.addEventListener('click', returnToLobby);
         copyUrlButton.addEventListener('click', () => {
             pcJoinUrlInput.select();
             document.execCommand('copy');
