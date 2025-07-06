@@ -335,6 +335,7 @@
         let moles = [];
         let moleGameInterval = null;
         let currentMoleSpeed = 5.0;
+        let gameStartTime = null;
 
         // --- Constants ---
         const difficultySettings = {
@@ -577,7 +578,7 @@
         function listenForActions() {
             if (actionsUnsubscribe) actionsUnsubscribe();
             const actionsRef = collection(db, "games", gameId, "actions");
-            const q = query(actionsRef, where("timestamp", ">", serverTimestamp()));
+            const q = query(actionsRef, where("timestamp", ">", gameStartTime)); 
             actionsUnsubscribe = onSnapshot(q, (snapshot) => {
                  snapshot.docChanges().forEach((change) => {
                     if (change.type === "added") {
@@ -747,6 +748,7 @@
         }
 
         async function proceedToStartGame() {
+            gameStartTime = new Date();
             listenForActions();
             lobbyScreen.classList.add('hidden');
             gameScreen.classList.remove('hidden');
