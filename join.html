@@ -11,11 +11,10 @@
 <body class="flex items-center justify-center min-h-screen p-4">
 
     <div class="w-full max-w-sm p-8 bg-white rounded-2xl shadow-xl text-center">
-        <h1 class="text-3xl font-bold text-sky-700 mb-6">게임 참여</h1>
-        <div id="join-form">
+        <div id="join-screen">
+            <h1 class="text-3xl font-bold text-sky-700 mb-6">게임 참여</h1>
             <input type="text" id="player-name" placeholder="이름을 입력하세요" class="w-full p-3 border rounded-md text-center text-lg mb-4" required>
             
-            <!-- 팀 선택 UI (동적으로 표시됨) -->
             <div id="team-choice-container" class="hidden mb-4">
                 <p class="font-bold mb-2">팀을 선택하세요:</p>
                 <div class="flex justify-center gap-4">
@@ -26,14 +25,35 @@
 
             <button id="auto-join-btn" type="button" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-full text-xl transition">참여하기</button>
         </div>
-        <div id="loading" class="hidden">
-            <p class="text-lg text-gray-600 animate-pulse">게임 시작을 기다리는 중...</p>
+
+        <div id="lobby-screen" class="hidden">
+            <h1 class="text-3xl font-bold text-sky-700 mb-2">대기실</h1>
+            <p class="text-gray-600 mb-6">진행자가 게임을 시작할 때까지 기다려주세요.</p>
+            
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="font-bold">이름:</label>
+                    <div class="flex gap-2 mt-1">
+                        <input type="text" id="current-player-name" class="w-full p-2 border rounded-md" disabled>
+                        <button id="edit-name-btn" class="bg-gray-200 hover:bg-gray-300 px-4 rounded-md">수정</button>
+                    </div>
+                </div>
+                <div id="my-team-container">
+                    <label class="font-bold">나의 팀:</label>
+                    <div class="flex gap-2 mt-1">
+                        <input type="text" id="current-team-name" class="w-full p-2 border rounded-md bg-gray-100" readonly>
+                        <button id="change-team-btn" class="bg-gray-200 hover:bg-gray-300 px-4 rounded-md">변경</button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="ready-btn" class="mt-8 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-full text-xl transition">준비 완료</button>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, addDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, addDoc, collection, onSnapshot, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBCNjgy_28rzMu66Si9W4U6y6sZ6kffIPk",
@@ -47,77 +67,212 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        const joinForm = document.getElementById('join-form');
+        const joinScreen = document.getElementById('join-screen');
+        const lobbyScreen = document.getElementById('lobby-screen');
+        
         const playerNameInput = document.getElementById('player-name');
-        const loadingDiv = document.getElementById('loading');
         const teamChoiceContainer = document.getElementById('team-choice-container');
         const joinTeamABtn = document.getElementById('join-team-a');
         const joinTeamBBtn = document.getElementById('join-team-b');
         const autoJoinBtn = document.getElementById('auto-join-btn');
 
+        const currentPlayerNameInput = document.getElementById('current-player-name');
+        const editNameBtn = document.getElementById('edit-name-btn');
+        const myTeamContainer = document.getElementById('my-team-container');
+        const currentTeamNameInput = document.getElementById('current-team-name');
+        const changeTeamBtn = document.getElementById('change-team-btn');
+        const readyBtn = document.getElementById('ready-btn');
+
         const urlParams = new URLSearchParams(window.location.search);
         const gameId = urlParams.get('gameId');
+        let playerId = sessionStorage.getItem(`playerId_${gameId}`);
+        let gameUnsubscribe, playerUnsubscribe;
 
         if (!gameId) {
-            alert("잘못된 접근입니다. QR 코드를 다시 스캔해주세요.");
-            window.location.href = "/";
+            document.body.innerHTML = '<p class="text-red-500 text-2xl">잘못된 접근입니다. QR 코드를 다시 스캔해주세요.</p>';
         }
-        
-        const gameRef = doc(db, "games", gameId);
 
-        onSnapshot(gameRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const gameData = docSnap.data();
-                if (gameData.mode === 'team' && gameData.assignMode === 'choice') {
-                    teamChoiceContainer.classList.remove('hidden');
-                    autoJoinBtn.classList.add('hidden');
-                    joinTeamABtn.textContent = gameData.teams.teamA.name;
-                    joinTeamBBtn.textContent = gameData.teams.teamB.name;
+        function getPlayerId() {
+            return sessionStorage.getItem(`playerId_${gameId}`);
+        }
+        function setPlayerId(id) {
+            sessionStorage.setItem(`playerId_${gameId}`, id);
+            playerId = id;
+        }
+
+        async function checkExistingPlayer() {
+            const existingPlayerId = getPlayerId();
+            if (existingPlayerId) {
+                const playerRef = doc(db, "games", gameId, "players", existingPlayerId);
+                const playerSnap = await getDoc(playerRef);
+                if (playerSnap.exists()) {
+                    playerId = existingPlayerId;
+                    showLobbyUI(playerSnap.data());
+                    listenToGameChanges();
                 } else {
-                    teamChoiceContainer.classList.add('hidden');
-                    autoJoinBtn.classList.remove('hidden');
+                    sessionStorage.removeItem(`playerId_${gameId}`);
                 }
             }
-        });
+        }
+
+        function listenToGameChanges() {
+            if (gameUnsubscribe) gameUnsubscribe();
+            const gameRef = doc(db, "games", gameId);
+            gameUnsubscribe = onSnapshot(gameRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const gameData = docSnap.data();
+                    
+                    if (gameData.state === "playing" && getPlayerId()) {
+                        window.location.href = `controller.html?gameId=${gameId}&playerId=${getPlayerId()}`;
+                    } else if (gameData.state === "lobby" && window.location.pathname.includes('controller.html')) {
+                        // This case is handled in controller.html to show waiting screen
+                    }
+
+                    if (gameData.mode === 'team' && gameData.assignMode === 'choice') {
+                        teamChoiceContainer.classList.remove('hidden');
+                        autoJoinBtn.classList.add('hidden');
+                        joinTeamABtn.textContent = gameData.teams.teamA.name;
+                        joinTeamBBtn.textContent = gameData.teams.teamB.name;
+                        myTeamContainer.classList.remove('hidden');
+                        changeTeamBtn.classList.remove('hidden');
+                    } else {
+                        teamChoiceContainer.classList.add('hidden');
+                        autoJoinBtn.classList.remove('hidden');
+                        myTeamContainer.classList.add('hidden');
+                        changeTeamBtn.classList.add('hidden');
+                    }
+                    updatePlayerTeamUI();
+                }
+            });
+        }
+
+        function listenToPlayerChanges() {
+            if (playerUnsubscribe) playerUnsubscribe();
+            const playerRef = doc(db, "games", gameId, "players", getPlayerId());
+            playerUnsubscribe = onSnapshot(playerRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    updateLobbyUI(docSnap.data());
+                    updatePlayerTeamUI();
+                }
+            });
+        }
+
+        function showLobbyUI(playerData) {
+            joinScreen.classList.add('hidden');
+            lobbyScreen.classList.remove('hidden');
+            updateLobbyUI(playerData);
+            listenToPlayerChanges();
+        }
+
+        function updateLobbyUI(playerData) {
+            currentPlayerNameInput.value = playerData.name;
+            readyBtn.dataset.status = playerData.status || 'joining';
+
+            if (playerData.status === 'ready') {
+                readyBtn.textContent = '준비 취소';
+                readyBtn.classList.replace('bg-green-500', 'bg-yellow-500');
+                readyBtn.classList.replace('hover:bg-green-600', 'hover:bg-yellow-600');
+                editNameBtn.disabled = true;
+                changeTeamBtn.disabled = true;
+                currentPlayerNameInput.disabled = true;
+            } else {
+                readyBtn.textContent = '준비 완료';
+                readyBtn.classList.replace('bg-yellow-500', 'bg-green-500');
+                readyBtn.classList.replace('hover:bg-yellow-600', 'hover:bg-green-600');
+                editNameBtn.disabled = false;
+                changeTeamBtn.disabled = false;
+            }
+        }
+        
+        async function updatePlayerTeamUI() {
+            const gameRef = doc(db, "games", gameId);
+            const playerRef = doc(db, "games", gameId, "players", getPlayerId());
+            const [gameSnap, playerSnap] = await Promise.all([getDoc(gameRef), getDoc(playerRef)]);
+
+            if (gameSnap.exists() && playerSnap.exists()) {
+                const gameData = gameSnap.data();
+                const playerData = playerSnap.data();
+                const teamName = playerData.team ? gameData.teams[playerData.team].name : "미지정";
+                currentTeamNameInput.value = teamName;
+            }
+        }
 
         async function joinGame(team = null) {
             const playerName = playerNameInput.value.trim();
-            if (!playerName) {
-                alert("이름을 입력해주세요.");
-                return;
-            }
+            if (!playerName) { alert("이름을 입력해주세요."); return; }
 
             try {
-                const playerData = {
-                    name: playerName,
-                    score: 0
-                };
-                if (team) {
-                    playerData.team = team;
-                }
+                const playerData = { name: playerName, score: 0, status: "joining" };
+                if (team) playerData.team = team;
 
                 const playersRef = collection(db, "games", gameId, "players");
                 const playerDocRef = await addDoc(playersRef, playerData);
-
-                onSnapshot(gameRef, (gameDoc) => {
-                    const gameData = gameDoc.data();
-                    if (gameData.state === "playing") {
-                        window.location.href = `controller.html?gameId=${gameId}&playerId=${playerDocRef.id}`;
-                    }
-                });
-
-                joinForm.classList.add('hidden');
-                loadingDiv.classList.remove('hidden');
+                setPlayerId(playerDocRef.id);
+                
+                showLobbyUI(playerData);
+                listenToGameChanges();
+                updatePlayerTeamUI();
 
             } catch (error) {
                 console.error("참여 오류:", error);
                 alert("게임 참여에 실패했습니다. 다시 시도해주세요.");
             }
         }
+        
+        async function handleJoin(teamId = null) {
+            const existingPlayerId = getPlayerId();
+            if(existingPlayerId) { // 팀 변경
+                const playerRef = doc(db, "games", gameId, "players", existingPlayerId);
+                await updateDoc(playerRef, { team: teamId });
+                showLobbyUI({ name: currentPlayerNameInput.value, status: 'joining', team: teamId });
+                updatePlayerTeamUI();
+            } else { // 신규 참여
+                await joinGame(teamId);
+            }
+        }
 
-        autoJoinBtn.addEventListener('click', () => joinGame());
-        joinTeamABtn.addEventListener('click', () => joinGame('teamA'));
-        joinTeamBBtn.addEventListener('click', () => joinGame('teamB'));
+
+        editNameBtn.addEventListener('click', async () => {
+            if (currentPlayerNameInput.disabled) {
+                currentPlayerNameInput.disabled = false;
+                currentPlayerNameInput.focus();
+                editNameBtn.textContent = '저장';
+            } else {
+                const newName = currentPlayerNameInput.value.trim();
+                if (newName) {
+                    const playerRef = doc(db, "games", gameId, "players", getPlayerId());
+                    await updateDoc(playerRef, { name: newName });
+                    currentPlayerNameInput.disabled = true;
+                    editNameBtn.textContent = '수정';
+                } else {
+                    alert('이름을 입력해주세요.');
+                }
+            }
+        });
+
+        changeTeamBtn.addEventListener('click', () => {
+             lobbyScreen.classList.add('hidden');
+             joinScreen.classList.remove('hidden');
+             autoJoinBtn.classList.add('hidden');
+             teamChoiceContainer.classList.remove('hidden');
+             playerNameInput.value = currentPlayerNameInput.value;
+             playerNameInput.disabled = true;
+        });
+
+        readyBtn.addEventListener('click', async () => {
+            const currentStatus = readyBtn.dataset.status;
+            const newStatus = currentStatus === 'ready' ? 'joining' : 'ready';
+            const playerRef = doc(db, "games", gameId, "players", getPlayerId());
+            await updateDoc(playerRef, { status: newStatus });
+        });
+
+        autoJoinBtn.addEventListener('click', () => handleJoin());
+        joinTeamABtn.addEventListener('click', () => handleJoin('teamA'));
+        joinTeamBBtn.addEventListener('click', () => handleJoin('teamB'));
+
+        // 초기 실행
+        checkExistingPlayer();
+        listenToGameChanges();
 
     </script>
 </body>
