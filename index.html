@@ -842,6 +842,36 @@
             return { verse, words, blankIndex, currentBlankWord };
         }
 
+        // ## REFACTORED to accept only a string array as source
+        function generateDistractors(correctWord, sourceWords, count) {
+            const candidatePool = Array.from(new Set(
+                sourceWords
+                    .map(w => w.replace(/[.,!?]/g, ''))
+                    .filter(w => w && w.length > 1 && w !== correctWord)
+            ));
+            
+            // Shuffle the pool
+            for (let i = candidatePool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [candidatePool[i], candidatePool[j]] = [candidatePool[j], candidatePool[i]];
+            }
+            
+            const distractors = new Set(candidatePool.slice(0, count));
+
+            // If not enough distractors, add some generic ones
+            const genericDistractors = ["사랑", "믿음", "소망", "예수", "하나님", "천국", "기도", "말씀"];
+            let genericIndex = 0;
+            while (distractors.size < count && genericIndex < genericDistractors.length) {
+                const genericWord = genericDistractors[genericIndex];
+                if (genericWord !== correctWord && !distractors.has(genericWord)) {
+                    distractors.add(genericWord);
+                }
+                genericIndex++;
+            }
+            
+            return Array.from(distractors);
+        }
+
         async function nextRoundFillInBlank() {
             roundActive = true;
             playRoundStartSound();
@@ -854,7 +884,9 @@
             if (!verseInfo) { nextRound(); return; }
             
             const { verse, words, blankIndex, currentBlankWord } = verseInfo;
-            const distractors = generateDistractors(currentBlankWord, versesData, 2);
+            
+            const allWords = versesData.flatMap(v => v.본문.split(' '));
+            const distractors = generateDistractors(currentBlankWord, allWords, 2);
 
             const options = [currentBlankWord, ...distractors];
             options.sort(() => Math.random() - 0.5);
@@ -898,7 +930,9 @@
                 if (!verseInfo) { nextRound(); return; }
                 const { verse, words, blankIndex, currentBlankWord } = verseInfo;
                 correctAnswer = currentBlankWord;
-                const distractors = generateDistractors(correctAnswer, versesData, 8);
+                
+                const allWords = versesData.flatMap(v => v.본문.split(' '));
+                const distractors = generateDistractors(correctAnswer, allWords, 8);
                 
                 wordsForRound = [correctAnswer, ...distractors];
                 questionPayload = {
@@ -1093,35 +1127,6 @@
             if (cleanWord.length <= 1) return false;
             for (const p of particlesAndEndings) { if (cleanWord.endsWith(p)) return false; }
             return true;
-        }
-
-        function generateDistractors(correctWord, source, count) {
-            let candidatePool;
-            if (Array.isArray(source)) { // For first-word-whack
-                candidatePool = Array.from(new Set(source.filter(w => w && w !== correctWord)));
-            } else { // For fill-in-blank and blank-whack
-                candidatePool = Array.from(new Set(
-                    source.flatMap(v => v.본문.split(' '))
-                        .map(w => w.replace(/[.,!?]/g, ''))
-                        .filter(w => w.length > 1 && w !== correctWord)
-                ));
-            }
-            
-            for (let i = candidatePool.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [candidatePool[i], candidatePool[j]] = [candidatePool[j], candidatePool[i]];
-            }
-            
-            const distractors = new Set(candidatePool.slice(0, count));
-
-            const genericDistractors = ["사랑", "믿음", "소망", "예수", "하나님", "천국", "기도", "말씀"];
-            while (distractors.size < count) {
-                const genericWord = genericDistractors[Math.floor(Math.random() * genericDistractors.length)];
-                if (genericWord !== correctWord && !distractors.has(genericWord)) {
-                    distractors.add(genericWord);
-                }
-            }
-            return Array.from(distractors);
         }
 
         // --- Event Listeners ---
