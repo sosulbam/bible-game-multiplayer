@@ -97,6 +97,36 @@
         let gameDataCache = null;
         let actionCooldown = false;
         const TOUCH_LIMIT_PER_ROUND = 3;
+        let wakeLock = null;
+
+        // --- Screen Wake Lock ---
+        const requestWakeLock = async () => {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Screen Wake Lock was released');
+                    });
+                    console.log('Screen Wake Lock is active');
+                } catch (err) {
+                    console.error(`${err.name}, ${err.message}`);
+                }
+            }
+        };
+
+        const releaseWakeLock = async () => {
+            if (wakeLock !== null) {
+                await wakeLock.release();
+                wakeLock = null;
+            }
+        };
+
+        const handleVisibilityChange = async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         function setupControllers(gameplayMode) {
             const isMoleGame = gameplayMode.includes('whack');
@@ -161,7 +191,6 @@
             const newGameData = doc.data();
             if (!newGameData) return;
 
-            // 게임플레이 모드 변경 감지
             if (!gameDataCache || gameDataCache.settings?.gameplayMode !== newGameData.settings?.gameplayMode) {
                 if (newGameData.settings?.gameplayMode) {
                     setupControllers(newGameData.settings.gameplayMode);
@@ -176,14 +205,13 @@
                 controllerUI.classList.remove('hidden');
                 waitingScreen.classList.add('hidden');
                 roundMessageEl.textContent = `문제 ${gameDataCache.currentRound || 1}`;
+                requestWakeLock();
 
-                // 터치 제한 확인
-                if (playerDataCache && gameDataCache.roundTouchCount) {
-                    const myTeam = playerDataCache.team;
-                    const touchCount = gameDataCache.roundTouchCount[myTeam] || 0;
+                if (playerDataCache && gameDataCache.roundPlayerTouchCount) {
+                    const touchCount = gameDataCache.roundPlayerTouchCount[playerId] || 0;
                     if (touchCount >= TOUCH_LIMIT_PER_ROUND) {
                         setButtonsDisabled(true);
-                        touchLimitMessage.textContent = '우리 팀의 기회를 모두 사용했습니다!';
+                        touchLimitMessage.textContent = '기회를 모두 사용했습니다!';
                         touchLimitMessage.classList.remove('hidden');
                     } else {
                         setButtonsDisabled(false);
@@ -191,15 +219,16 @@
                     }
                 }
 
-            } else { // "lobby", "finished"
+            } else { 
                 controllerUI.classList.add('hidden');
                 waitingScreen.classList.remove('hidden');
+                releaseWakeLock();
                 if (gameDataCache.state === "finished") {
                     waitingMessage.innerHTML = `게임 종료! <br> 잠시 후 대기실로 돌아갑니다.`;
                     setTimeout(() => {
                         window.location.href = `join.html?gameId=${gameId}`;
                     }, 3000);
-                } else { // lobby
+                } else { 
                      waitingMessage.textContent = '다음 게임을 기다리는 중입니다...';
                 }
             }
@@ -226,7 +255,7 @@
 
             setTimeout(() => {
                 actionCooldown = false;
-            }, 500); // 쿨다운 0.5초
+            }, 500);
         }
         
     </script>

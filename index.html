@@ -343,7 +343,7 @@
             points: 10,
             penalty: -2 // 감점 -2점으로 수정
         };
-        const TOUCH_LIMIT_PER_ROUND = 3; // 팀당 라운드별 터치 제한
+        const TOUCH_LIMIT_PER_ROUND = 3; // 개인별 라운드별 터치 제한
 
         const teamNameThemes = {
             animals: ["🦁 사자", "🐯 호랑이", "🐻 곰", "🦊 여우", "🦅 독수리", "🦄 유니콘", "🐉 용", "🐘 코끼리", "🐬 돌고래", "🦈 상어"],
@@ -605,26 +605,26 @@
 
                     if (!playerDoc.exists() || !gameDoc.exists() || !roundActive) return;
                     
-                    const currentTeam = playerDoc.data().team;
                     const gameData = gameDoc.data();
                     const currentTeams = gameData.teams;
-                    const touchCount = (gameData.roundTouchCount && gameData.roundTouchCount[currentTeam]) || 0;
+                    const touchCount = (gameData.roundPlayerTouchCount && gameData.roundPlayerTouchCount[playerId]) || 0;
 
                     if (touchCount >= TOUCH_LIMIT_PER_ROUND) {
                         return; // 기회 소진
                     }
 
-                    // 터치 횟수 증가
-                    transaction.update(gameDocRef, { [`roundTouchCount.${currentTeam}`]: touchCount + 1 });
+                    // 개인별 터치 횟수 증가
+                    transaction.update(gameDocRef, { [`roundPlayerTouchCount.${playerId}`]: touchCount + 1 });
 
                     if (isCorrect) {
                         roundActive = false;
                         playCorrectSound();
                         
                         const newPlayerScore = (playerDoc.data().score || 0) + difficultySettings.points;
-                        transaction.update(playerDocRef, { score: newPlayerScore });
-                        
+                        const currentTeam = playerDoc.data().team;
                         const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.points;
+                        
+                        transaction.update(playerDocRef, { score: newPlayerScore });
                         transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
 
                         // 정답 시각 효과
@@ -649,6 +649,7 @@
 
                     } else { // 오답
                         playIncorrectSound();
+                        const currentTeam = playerDoc.data().team;
                         const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.penalty;
                         transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
                         
@@ -693,15 +694,16 @@
         function showInstructions() {
             let title, htmlContent;
             const isMoleGame = gameplayMode.includes('whack');
-            const rounds = isMoleGame ? moleRoundsInput.value : roundsInput.value;
             
+            const commonRule = `<p><strong>주의 사항:</strong> 문제당 <strong>개인별로 ${TOUCH_LIMIT_PER_ROUND}번</strong>의 기회가 주어집니다. 오답 시 팀 점수가 -2점 감점됩니다.</p>`;
+
             switch(gameplayMode) {
                 case 'fill-in-blank':
                     title = '말씀 채우기 안내';
                     htmlContent = `
                         <p><strong>게임 방법:</strong> 하늘에서 내려오는 단어들 중, 위에 제시된 말씀의 빈칸에 들어갈 올바른 단어를 선택하세요.</p>
                         <p><strong>게임 시간:</strong> 총 ${timeLimitInput.value}분 동안 진행됩니다.</p>
-                        <p><strong>주의 사항:</strong> 팀별로 문제당 <strong>${TOUCH_LIMIT_PER_ROUND}번</strong>의 기회가 주어집니다. 오답 시 -2점 감점됩니다.</p>
+                        ${commonRule}
                     `;
                     break;
                 case 'first-word-whack':
@@ -709,7 +711,7 @@
                     htmlContent = `
                         <p><strong>게임 방법:</strong> 제시된 말씀의 '첫 어절'이 적힌 두더지를 잡으세요.</p>
                         <p><strong>게임 시간:</strong> 문제당 ${moleTimeLimitInput.value}초의 제한 시간이 있습니다.</p>
-                        <p><strong>주의 사항:</strong> 팀별로 문제당 <strong>${TOUCH_LIMIT_PER_ROUND}번</strong>의 기회가 주어집니다. 오답 시 -2점 감점됩니다.</p>
+                        ${commonRule}
                     `;
                     break;
                 case 'blank-whack':
@@ -717,7 +719,7 @@
                     htmlContent = `
                         <p><strong>게임 방법:</strong> 빈칸이 있는 말씀이 제시됩니다. 빈칸에 들어갈 올바른 단어가 적힌 두더지를 잡으세요.</p>
                         <p><strong>게임 시간:</strong> 문제당 ${moleTimeLimitInput.value}초의 제한 시간이 있습니다.</p>
-                        <p><strong>주의 사항:</strong> 팀별로 문제당 <strong>${TOUCH_LIMIT_PER_ROUND}번</strong>의 기회가 주어집니다. 오답 시 -2점 감점됩니다.</p>
+                        ${commonRule}
                     `;
                     break;
             }
@@ -728,7 +730,7 @@
             setTimeout(() => {
                 instructionModal.classList.add('hidden');
                 startCountdown();
-            }, 5000); // 5초간 안내문 표시
+            }, 5000);
         }
 
         function startCountdown() {
@@ -795,10 +797,9 @@
             currentRound++;
             roundCounterEl.textContent = `${currentRound} / ${totalRounds}`;
             
-            // 라운드 시작 시 터치 횟수 초기화
             await updateDoc(doc(db, "games", gameId), {
                 currentRound,
-                roundTouchCount: { teamA: 0, teamB: 0 }
+                roundPlayerTouchCount: {} // 개인별 터치 횟수 초기화
             });
 
             if (gameplayMode === 'fill-in-blank') {
@@ -841,8 +842,7 @@
             
             return { verse, words, blankIndex, currentBlankWord };
         }
-
-        // ## REFACTORED to accept only a string array as source
+        
         function generateDistractors(correctWord, sourceWords, count) {
             const candidatePool = Array.from(new Set(
                 sourceWords
@@ -850,7 +850,6 @@
                     .filter(w => w && w.length > 1 && w !== correctWord)
             ));
             
-            // Shuffle the pool
             for (let i = candidatePool.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [candidatePool[i], candidatePool[j]] = [candidatePool[j], candidatePool[i]];
@@ -858,7 +857,6 @@
             
             const distractors = new Set(candidatePool.slice(0, count));
 
-            // If not enough distractors, add some generic ones
             const genericDistractors = ["사랑", "믿음", "소망", "예수", "하나님", "천국", "기도", "말씀"];
             let genericIndex = 0;
             while (distractors.size < count && genericIndex < genericDistractors.length) {
@@ -1107,7 +1105,7 @@
                 "teams.teamA.score": 0,
                 "teams.teamB.score": 0,
                 question: null,
-                roundTouchCount: null
+                roundPlayerTouchCount: null
             });
             await batch.commit();
 
