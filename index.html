@@ -1,6 +1,3 @@
-<!-- ======================================================================= -->
-<!-- =======================   index.html (진행자 화면)   ======================= -->
-<!-- ======================================================================= -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -44,11 +41,24 @@
             display: flex; align-items: center; justify-content: center;
             z-index: 1000;
         }
+        /* [수정됨] 게임 안내 모달 가독성 향상 */
         .modal-content {
-            background-color: white; padding: 2rem; border-radius: 1rem;
-            max-width: 90%; width: 500px; text-align: center;
+            background-color: white; padding: 3rem; border-radius: 1rem;
+            max-width: 90%; width: 800px; text-align: center;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
         }
+        #instruction-title {
+            font-size: 3rem; /* 3xl -> 5xl */
+            margin-bottom: 2rem; /* mb-4 -> mb-8 */
+        }
+        #instruction-body p {
+            font-size: 1.5rem; /* text-xl */
+            line-height: 2rem; /* leading-8 */
+        }
+        #instruction-body {
+            space-y: 1rem; /* space-y-3 -> space-y-4 */
+        }
+
         .countdown-text {
             font-size: 15rem; color: white; font-weight: bold;
             text-shadow: 0 0 20px rgba(0,0,0,0.5);
@@ -63,7 +73,6 @@
 <body class="flex items-center justify-center min-h-screen">
 
     <div id="game-container" class="w-full max-w-5xl mx-auto p-4 text-center">
-        <!-- 대기 화면 -->
         <div id="lobby-screen">
             <h1 class="text-4xl font-bold text-sky-700 mb-4">말씀의 빛: 그룹 대전</h1>
             <p class="text-xl text-gray-600 mb-6">스마트폰으로 QR 코드를 스캔하여 게임에 참여하세요!</p>
@@ -154,8 +163,9 @@
                 </div>
             </div>
             <div class="mt-8">
+                <button id="force-ready-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-8 rounded-full text-2xl transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed">모두 준비시키기</button>
                 <button id="start-game-button" class="bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-full text-2xl transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>게임 시작</button>
-                 <p id="start-game-notice" class="text-red-500 mt-2 hidden">모든 참가자가 '준비 완료' 상태여야 합니다.</p>
+                <p id="start-game-notice" class="text-red-500 mt-2 hidden">모든 참가자가 '준비 완료' 상태여야 합니다.</p>
             </div>
             <div class="mt-4 space-y-2">
                  <p class="text-gray-500">게임 ID: <span id="game-id-display"></span></p>
@@ -169,7 +179,6 @@
             </div>
         </div>
 
-        <!-- 게임 화면 -->
         <div id="game-screen" class="hidden">
             <div id="game-ui" class="mb-4 p-3 bg-white/80 backdrop-blur-sm rounded-xl shadow-lg flex justify-between items-center gap-6">
                 <div class="flex-none flex items-center divide-x divide-gray-300">
@@ -209,7 +218,6 @@
             <div id="scoreboard" class="mt-2 flex flex-wrap justify-center gap-4"></div>
         </div>
         
-        <!-- 결과 화면 -->
         <div id="result-screen" class="hidden">
             <h1 id="result-title" class="text-5xl font-bold text-amber-500 mb-8">🎉 최종 결과 🎉</h1>
             <div id="final-ranking" class="space-y-4 max-w-md mx-auto">
@@ -218,13 +226,11 @@
         </div>
     </div>
 
-    <!-- 안내 및 카운트다운 모달 -->
     <div id="instruction-modal" class="modal-overlay hidden">
         <div class="modal-content">
             <h2 id="instruction-title" class="text-3xl font-bold mb-4 text-sky-700">게임 안내</h2>
             <div id="instruction-body" class="text-left space-y-3">
-                <!-- 내용이 여기에 동적으로 삽입됩니다. -->
-            </div>
+                </div>
             <p class="mt-6 text-lg font-bold animate-pulse">잠시 후 게임이 시작됩니다...</p>
         </div>
     </div>
@@ -255,6 +261,7 @@
         const resultScreen = document.getElementById('result-screen');
         const qrcodeContainer = document.getElementById('qrcode');
         const startGameButton = document.getElementById('start-game-button');
+        const forceReadyBtn = document.getElementById('force-ready-btn'); // [추가됨]
         const startGameNotice = document.getElementById('start-game-notice');
         const gameIdDisplay = document.getElementById('game-id-display');
         const pcJoinUrlContainer = document.getElementById('pc-join-url-container');
@@ -314,7 +321,7 @@
         let gameplayMode = 'fill-in-blank';
         let players = {};
         let teams = {};
-        let gameMode = 'team'; // 개인전 삭제, 팀전 고정
+        let gameMode = 'team'; 
         let assignMode = 'auto';
         let teamTheme = 'animals';
         let playersUnsubscribe, actionsUnsubscribe;
@@ -337,20 +344,26 @@
         let currentMoleSpeed = 5.0;
         let gameStartTime = null;
 
+        // [추가됨] 두더지 게임 로직용 변수
+        let molePopCounter = 0;
+        let guaranteedCorrectMolePopNumber = -1;
+        let correctMoleHasPopped = false;
+
+
         // --- Constants ---
         const difficultySettings = {
             speed: 0.5, 
             points: 10,
-            penalty: -2 // 감점 -2점으로 수정
+            penalty: -2
         };
-        const TOUCH_LIMIT_PER_ROUND = 3; // 개인별 라운드별 터치 제한
+        const TOUCH_LIMIT_PER_ROUND = 3;
 
         const teamNameThemes = {
             animals: ["🦁 사자", "🐯 호랑이", "🐻 곰", "🦊 여우", "🦅 독수리", "🦄 유니콘", "🐉 용", "🐘 코끼리", "🐬 돌고래", "🦈 상어"],
             bible: ["🔑 베드로", "📜 야고보", "🕊️ 요한", "⚔️ 바울", "🌴 드보라", "🙏 한나", "⚕️ 모세", "⭐ 아브라함", "💖 마리아", "👑 다윗", "🐑 라헬", "🏺 리브가", "🌾 룻"]
         };
         
-        // --- Classes for Fill-in-Blank Game ---
+        // Classes (변경 없음)
         class PlayerCharacter {
             constructor(id, name, teamId) {
                 this.id = id; this.name = name; this.teamId = teamId;
@@ -429,7 +442,7 @@
             update() { if (!isGamePaused) this.life--; }
         }
         
-        // --- Audio Functions ---
+        // --- Audio Functions (변경 없음) ---
         function setupAudio() {
             if (synth || (Tone.context && Tone.context.state === 'running')) return;
             try { Tone.start(); synth = new Tone.PolySynth(Tone.Synth).toDestination(); } catch (e) { console.warn("Could not start audio context.", e); }
@@ -550,9 +563,12 @@
             const totalPlayers = Object.keys(players).length;
             if (totalPlayers === 0) {
                 startGameButton.disabled = true;
+                forceReadyBtn.disabled = true; // [추가됨]
                 startGameNotice.classList.add('hidden');
                 return;
             }
+
+            forceReadyBtn.disabled = false; // [추가됨] 참가자 있으면 활성화
             const readyPlayers = Object.values(players).filter(p => p.status === 'ready').length;
             
             if (totalPlayers > 0 && totalPlayers === readyPlayers) {
@@ -613,7 +629,6 @@
                         return; // 기회 소진
                     }
 
-                    // 개인별 터치 횟수 증가
                     transaction.update(gameDocRef, { [`roundPlayerTouchCount.${playerId}`]: touchCount + 1 });
 
                     if (isCorrect) {
@@ -627,7 +642,6 @@
                         transaction.update(playerDocRef, { score: newPlayerScore });
                         transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
 
-                        // 정답 시각 효과
                         if (gameplayMode === 'fill-in-blank' && targetInfo.enemy) {
                             for(let i = 0; i < 30; i++) {
                                 particles.push(new Particle(targetInfo.enemy.x + targetInfo.enemy.width/2, targetInfo.enemy.y + targetInfo.enemy.height/2, '255, 215, 0'));
@@ -653,7 +667,6 @@
                         const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.penalty;
                         transaction.update(gameDocRef, { [`teams.${currentTeam}.score`]: newTeamScore });
                         
-                         // 오답 시각 효과 (두더지 게임)
                         if (gameplayMode.includes('whack') && targetInfo.holeIndex !== undefined) {
                              const holeElement = document.getElementById(`mole-hole-${targetInfo.holeIndex}`);
                             const effect = document.createElement('div');
@@ -693,9 +706,9 @@
         
         function showInstructions() {
             let title, htmlContent;
-            const isMoleGame = gameplayMode.includes('whack');
             
-            const commonRule = `<p><strong>주의 사항:</strong> 문제당 <strong>개인별로 ${TOUCH_LIMIT_PER_ROUND}번</strong>의 기회가 주어집니다. 오답 시 팀 점수가 -2점 감점됩니다.</p>`;
+            // [수정됨] 공통 규칙 문구 스타일 강화
+            const commonRule = `<p class="mt-4 pt-4 border-t border-gray-300"><strong>⚠️ 주의:</strong> 문제당 <strong>개인별로 ${TOUCH_LIMIT_PER_ROUND}번</strong>의 기회가 주어집니다. 오답 시 팀 점수가 -2점 감점됩니다.</p>`;
 
             switch(gameplayMode) {
                 case 'fill-in-blank':
@@ -758,7 +771,7 @@
             let settings;
             const isMoleGame = gameplayMode.includes('whack');
 
-            if (!isMoleGame) { // 말씀 채우기
+            if (!isMoleGame) { 
                 totalRounds = parseInt(roundsInput.value) || 10;
                 totalGameTime = (parseInt(timeLimitInput.value) || 1) * 60;
                 fillInBlankCanvas.classList.remove('hidden');
@@ -771,7 +784,7 @@
                 startTotalGameTimer();
                 animate();
                 settings = { categories: selectedCategories, rounds: totalRounds, time: totalGameTime, gameplayMode };
-            } else { // 두더지 게임들
+            } else { 
                 totalRounds = parseInt(moleRoundsInput.value) || 10;
                 currentMoleSpeed = parseFloat(moleSpeedInput.value) || 5.0;
                 fillInBlankCanvas.classList.add('hidden');
@@ -799,7 +812,7 @@
             
             await updateDoc(doc(db, "games", gameId), {
                 currentRound,
-                roundPlayerTouchCount: {} // 개인별 터치 횟수 초기화
+                roundPlayerTouchCount: {} 
             });
 
             if (gameplayMode === 'fill-in-blank') {
@@ -905,6 +918,10 @@
             roundActive = true;
             playRoundStartSound();
             
+            molePopCounter = 0; // [추가됨] 팝 카운터 초기화
+            correctMoleHasPopped = false; // [추가됨] 정답 출현 플래그 초기화
+            guaranteedCorrectMolePopNumber = Math.floor(Math.random() * 3) + 1; // [추가됨] 1, 2, 3 중 하나를 랜덤으로 선택
+
             const baseSpeed = parseFloat(moleSpeedInput.value) || 5.0;
             currentMoleSpeed = Math.max(0.5, baseSpeed - (currentRound * 0.1));
 
@@ -973,22 +990,52 @@
             }, 1000);
         }
 
+        // [수정됨] 두더지 게임 출현 로직 수정
         function startMoleGameLoop() {
             clearInterval(moleGameInterval);
             moleGameInterval = setInterval(() => {
                 if (!roundActive || isGamePaused) return;
+
+                molePopCounter++;
+                let moleToPop;
+
                 const availableMoles = moles.filter(m => !m.isUp);
                 if (availableMoles.length === 0) return;
-                let molesToPop = Math.min(1 + Math.floor(currentRound / 4), 3);
-                const finalMolesToPop = Math.min(molesToPop, availableMoles.length);
 
-                for (let i = 0; i < finalMolesToPop; i++) {
-                    const moleIndex = Math.floor(Math.random() * availableMoles.length);
-                    const mole = availableMoles.splice(moleIndex, 1)[0];
-                    if (mole) mole.pop();
+                // 1. 첫 3번 안에 정답이 반드시 나오도록 보장
+                if (molePopCounter === guaranteedCorrectMolePopNumber && !correctMoleHasPopped) {
+                    moleToPop = moles.find(m => m.isCorrect && !m.isUp);
+                    if (moleToPop) {
+                        correctMoleHasPopped = true;
+                    }
                 }
-            }, 1000);
+                
+                // 2. 정답 출현 빈도 증가 (40% 확률) 및 일반 두더지 출현
+                if (!moleToPop) {
+                    const correctMole = moles.find(m => m.isCorrect);
+                    const shouldPopCorrect = Math.random() < 0.4; // 40% 확률로 정답 두더지 선택
+                    
+                    if (shouldPopCorrect && !correctMole.isUp) {
+                        moleToPop = correctMole;
+                        correctMoleHasPopped = true;
+                    } else {
+                        const incorrectMoles = availableMoles.filter(m => !m.isCorrect);
+                        if(incorrectMoles.length > 0) {
+                           moleToPop = incorrectMoles[Math.floor(Math.random() * incorrectMoles.length)];
+                        } else {
+                           // 오답 두더지가 모두 올라온 경우, 남은 두더지(정답) 중 하나를 선택
+                           moleToPop = availableMoles[Math.floor(Math.random() * availableMoles.length)];
+                        }
+                    }
+                }
+                
+                if (moleToPop) {
+                    moleToPop.pop();
+                }
+
+            }, 1000); // 1초마다 두더지 1마리 출현
         }
+
 
         function createMoleGrid() {
             moleGrid.innerHTML = '';
@@ -1092,12 +1139,10 @@
         
         async function returnToLobby() {
             const batch = writeBatch(db);
-            // Reset player scores and status
             Object.keys(players).forEach(playerId => {
                 const playerRef = doc(db, "games", gameId, "players", playerId);
                 batch.update(playerRef, { score: 0, status: "joining" });
             });
-            // Reset game document
             const gameRef = doc(db, "games", gameId);
             batch.update(gameRef, {
                 state: "lobby",
@@ -1109,12 +1154,10 @@
             });
             await batch.commit();
 
-            // Reset local state
             currentRound = 0;
             isGamePaused = false;
             pauseGameBtn.textContent = '일시정지';
             
-            // Switch UI
             resultScreen.classList.add('hidden');
             lobbyScreen.classList.remove('hidden');
         }
@@ -1126,6 +1169,32 @@
             for (const p of particlesAndEndings) { if (cleanWord.endsWith(p)) return false; }
             return true;
         }
+
+        // [추가됨] '모두 준비시키기' 기능
+        async function forceAllPlayersReady() {
+            if (!gameId || Object.keys(players).length === 0) return;
+            
+            forceReadyBtn.disabled = true;
+            forceReadyBtn.textContent = '처리중...';
+
+            const batch = writeBatch(db);
+            Object.keys(players).forEach(playerId => {
+                const playerRef = doc(db, "games", gameId, "players", playerId);
+                batch.update(playerRef, { status: "ready" });
+            });
+            
+            try {
+                await batch.commit();
+                console.log("All players forced to ready state.");
+            } catch (e) {
+                console.error("Failed to force players to ready state:", e);
+                alert("오류가 발생했습니다. 다시 시도해주세요.");
+            } finally {
+                forceReadyBtn.disabled = false;
+                forceReadyBtn.textContent = '모두 준비시키기';
+            }
+        }
+
 
         // --- Event Listeners ---
         gameplayModeSelector.addEventListener('click', async (e) => {
@@ -1186,6 +1255,7 @@
         });
         
         forceEndGameBtn.addEventListener('click', endGame);
+        forceReadyBtn.addEventListener('click', forceAllPlayersReady); // [추가됨]
         startGameButton.addEventListener('click', () => {
             setupAudio();
             selectedCategories = [...categorySelector.querySelectorAll('.selected')].map(btn => btn.dataset.category);
