@@ -920,7 +920,7 @@
             
             molePopCounter = 0; // [추가됨] 팝 카운터 초기화
             correctMoleHasPopped = false; // [추가됨] 정답 출현 플래그 초기화
-            guaranteedCorrectMolePopNumber = Math.floor(Math.random() * 3) + 1; // [추가됨] 1, 2, 3 중 하나를 랜덤으로 선택
+            guaranteedCorrectMolePopNumber = Math.floor(Math.random() * 5) + 1; // 1, 2, 3, 4, 5 중 하나를 랜덤으로 선택
 
             const baseSpeed = parseFloat(moleSpeedInput.value) || 5.0;
             currentMoleSpeed = Math.max(0.5, baseSpeed - (currentRound * 0.1));
