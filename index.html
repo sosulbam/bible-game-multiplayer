@@ -67,6 +67,35 @@
             0%, 100% { transform: scale(1); opacity: 1; }
             50% { transform: scale(1.2); opacity: 0.7; }
         }
+
+        /* QR Code Zoom Styles */
+        #qrcode {
+            cursor: pointer;
+            transition: all 0.3s ease-in-out;
+        }
+        #qrcode.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000; /* Ensure it's on top */
+            padding: 0; /* Override Tailwind padding */
+        }
+        #qrcode.fullscreen img {
+            width: 80vmin; /* Use viewport units for responsiveness */
+            height: 80vmin;
+            max-width: 90%;
+            max-height: 90%;
+            background-color: white;
+            padding: 20px;
+            border-radius: 1rem;
+            box-shadow: 0 0 30px rgba(255,255,255,0.2);
+        }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen">
@@ -362,7 +391,7 @@
             bible: ["🔑 베드로", "📜 야고보", "🕊️ 요한", "⚔️ 바울", "🌴 드보라", "🙏 한나", "⚕️ 모세", "⭐ 아브라함", "💖 마리아", "👑 다윗", "🐑 라헬", "🏺 리브가", "🌾 룻"]
         };
         
-        // --- Classes (변경 없음) ---
+        // --- Classes (No changes) ---
         class PlayerCharacter {
             constructor(id, name, teamId) {
                 this.id = id; this.name = name; this.teamId = teamId;
@@ -441,7 +470,7 @@
             update() { if (!isGamePaused) this.life--; }
         }
         
-        // --- Audio Functions (변경 없음) ---
+        // --- Audio Functions (No changes) ---
         function setupAudio() {
             if (synth || (Tone.context && Tone.context.state === 'running')) return;
             try { Tone.start(); synth = new Tone.PolySynth(Tone.Synth).toDestination(); } catch (e) { console.warn("Could not start audio context.", e); }
@@ -479,6 +508,11 @@
             qr.addData(joinUrl);
             qr.make();
             qrcodeContainer.innerHTML = qr.createImgTag(6);
+            
+            // Add click listener for QR code zoom
+            qrcodeContainer.addEventListener('click', () => {
+                qrcodeContainer.classList.toggle('fullscreen');
+            });
             
             listenToPlayers();
             listenToGameChanges();
@@ -625,7 +659,7 @@
                     const touchCount = (gameData.roundPlayerTouchCount && gameData.roundPlayerTouchCount[playerId]) || 0;
 
                     if (touchCount >= TOUCH_LIMIT_PER_ROUND) {
-                        return; // 기회 소진
+                        return; // Opportunity exhausted
                     }
 
                     transaction.update(gameDocRef, { [`roundPlayerTouchCount.${playerId}`]: touchCount + 1 });
@@ -660,7 +694,7 @@
                         clearInterval(roundTimerId);
                         setTimeout(() => nextRound(), 2000);
 
-                    } else { // 오답
+                    } else { // Incorrect answer
                         playIncorrectSound();
                         const currentTeam = playerDoc.data().team;
                         const newTeamScore = (currentTeams[currentTeam].score || 0) + difficultySettings.penalty;
@@ -842,12 +876,12 @@
                 endGame();
                 return null;
             }
-            return [...filtered]; // 원본 배열을 수정하지 않도록 복사본 반환
+            return [...filtered]; // Return a copy to avoid modifying original array
         }
 
         function getNextVerse() {
             if (gameVersePool.length === 0) {
-                console.log("모든 문제를 사용했습니다. 문제 목록을 다시 섞습니다.");
+                console.log("All questions used. Reshuffling question pool.");
                 const filteredVerses = getFilteredVerses();
                  for (let i = filteredVerses.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -928,7 +962,7 @@
             
             molePopCounter = 0;
             correctMoleHasPopped = false;
-            guaranteedCorrectMolePopNumber = Math.floor(Math.random() * 5) + 1; // 1~5 중 랜덤
+            guaranteedCorrectMolePopNumber = Math.floor(Math.random() * 5) + 1; // Random between 1-5
 
             const baseSpeed = parseFloat(moleSpeedInput.value) || 5.0;
             currentMoleSpeed = Math.max(0.5, baseSpeed - (currentRound * 0.1));
